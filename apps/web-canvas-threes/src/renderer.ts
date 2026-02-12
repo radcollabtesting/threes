@@ -8,9 +8,16 @@
  */
 
 import type { CellValue, Grid, Direction } from '@threes/game-logic';
-import { COLORS, SIZES, BOARD, tileColors, ANIMATION } from '@threes/design-tokens';
+import { COLORS, SIZES, BOARD, tileColors, ANIMATION, BUTTON, SCORE_LIST } from '@threes/design-tokens';
 import type { AnimState } from './animation';
 import type { DragState, TilePreview } from './drag';
+import type { ScoreEntry } from './score-history';
+
+export interface GameOverData {
+  currentScore: number;
+  scores: ScoreEntry[];
+  currentScoreIndex: number;
+}
 
 export class Renderer {
   private canvas: HTMLCanvasElement;
@@ -18,6 +25,7 @@ export class Renderer {
   private _scale = 1;
   private _boardX = 0;
   private _boardY = 0;
+  private _newGameBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -28,6 +36,11 @@ export class Renderer {
   /** Current uniform scale factor (needed by drag progress calculation) */
   get currentScale(): number {
     return this._scale;
+  }
+
+  /** Returns the "New Game" button bounds in CSS px, or null if not rendered. */
+  get newGameButtonBounds(): { x: number; y: number; w: number; h: number } | null {
+    return this._newGameBtnBounds;
   }
 
   /** Recalculates canvas size and scale factor (call on window resize) */
@@ -67,6 +80,7 @@ export class Renderer {
     gameOver: boolean,
     anim: AnimState,
     drag?: DragState | null,
+    gameOverData?: GameOverData | null,
   ): void {
     const ctx = this.ctx;
     const s = this._scale;
@@ -144,21 +158,87 @@ export class Renderer {
     ctx.fillText('next', nextX + tw / 2, labelY);
 
     // ── Game-over overlay ─────────────────────────────────
+    this._newGameBtnBounds = null;
+
     if (gameOver) {
       ctx.fillStyle = 'rgba(0,0,0,0.7)';
       ctx.fillRect(0, 0, vw, vh);
 
       const cx = vw / 2;
-      const cy = vh / 2;
+      const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      let cursorY = vh * 0.15;
 
+      // "Game Over" title
       ctx.fillStyle = '#FFF';
-      ctx.font = `bold ${32 * s}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.font = `bold ${32 * s}px ${font}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('Game Over', cx, cy - 20 * s);
+      ctx.fillText('Game Over', cx, cursorY);
+      cursorY += 40 * s;
 
-      ctx.font = `${16 * s}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-      ctx.fillText('Press R or tap to restart', cx, cy + 24 * s);
+      if (gameOverData) {
+        // Current score (large)
+        ctx.font = `bold ${24 * s}px ${font}`;
+        ctx.fillStyle = '#FFF';
+        ctx.fillText(`Score: ${gameOverData.currentScore}`, cx, cursorY);
+        cursorY += 36 * s;
+
+        // Score history header
+        ctx.font = `bold ${SCORE_LIST.headerFontSize * s}px ${font}`;
+        ctx.fillStyle = SCORE_LIST.normalText;
+        ctx.fillText('Score History', cx, cursorY);
+        cursorY += 28 * s;
+
+        // Score list
+        const visible = gameOverData.scores.slice(0, SCORE_LIST.maxVisible);
+        const lh = SCORE_LIST.lineHeight * s;
+
+        for (let i = 0; i < visible.length; i++) {
+          const entry = visible[i];
+          const isHighlighted = i === gameOverData.currentScoreIndex;
+
+          if (isHighlighted) {
+            // Highlighted pill background
+            const pillW = 120 * s;
+            const pillH = lh;
+            this.roundRect(cx - pillW / 2, cursorY - pillH / 2, pillW, pillH, pillH / 2, SCORE_LIST.highlightFill);
+            ctx.fillStyle = SCORE_LIST.highlightText;
+          } else {
+            ctx.fillStyle = SCORE_LIST.normalText;
+          }
+
+          ctx.font = `${SCORE_LIST.fontSize * s}px ${font}`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(`${entry.score}`, cx, cursorY);
+          cursorY += lh;
+        }
+
+        if (gameOverData.scores.length > SCORE_LIST.maxVisible) {
+          ctx.fillStyle = SCORE_LIST.normalText;
+          ctx.font = `${SCORE_LIST.fontSize * s}px ${font}`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(`+${gameOverData.scores.length - SCORE_LIST.maxVisible} more`, cx, cursorY);
+          cursorY += lh;
+        }
+      }
+
+      // "New Game" button
+      cursorY += 24 * s;
+      const btnW = BUTTON.width * s;
+      const btnH = BUTTON.height * s;
+      const btnX = cx - btnW / 2;
+      const btnR = BUTTON.borderRadius * s;
+
+      this.roundRect(btnX, cursorY, btnW, btnH, btnR, BUTTON.fill);
+      ctx.fillStyle = BUTTON.text;
+      ctx.font = `bold ${BUTTON.fontSize * s}px ${font}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('New Game', btnX + btnW / 2, cursorY + btnH / 2);
+
+      this._newGameBtnBounds = { x: btnX, y: cursorY, w: btnW, h: btnH };
     }
   }
 
