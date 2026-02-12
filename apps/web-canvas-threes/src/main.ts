@@ -33,6 +33,7 @@ import {
   type DragState,
 } from './drag';
 import { saveScore } from './score-history';
+import { playMergeSound } from './audio';
 import type { GameOverData } from './renderer';
 
 /* ── Parse query-param config ──────────────────────────── */
@@ -64,6 +65,16 @@ function onGameOver(): void {
   gameOverData = { currentScore: finalScore, scores: sorted, currentScoreIndex: sortedIndex };
 }
 
+/* ── Audio helper ──────────────────────────────────────── */
+
+function playMergeSounds(): void {
+  for (const ev of game.lastMoveEvents) {
+    if (ev.type === 'merge' && (ev.value === 3 || ev.value === 6)) {
+      playMergeSound(ev.value);
+    }
+  }
+}
+
 /* ── Input handlers ────────────────────────────────────── */
 
 /**
@@ -78,6 +89,7 @@ function handleInstantMove(direction: Direction): void {
   if (success) {
     triggerMoveAnimations(game.lastMoveEvents, anim, direction);
     triggerNextTileAnim(anim, oldNext, game.nextTile);
+    playMergeSounds();
     if ((game.status as string) === 'ended') onGameOver();
   } else {
     triggerShake(anim);
@@ -211,6 +223,7 @@ function loop(now: number): void {
         game.move(direction);
         triggerSpawnOnly(game.lastMoveEvents, anim, direction);
         triggerNextTileAnim(anim, oldNext, game.nextTile);
+        playMergeSounds();
         if (game.status === 'ended') onGameOver();
       } else {
         // Cancel — shake if the move was invalid
