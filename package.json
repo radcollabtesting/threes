@@ -1,0 +1,14 @@
+{
+  "name": "threes-monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "test": "npm run test --workspace=packages/game-logic",
+    "test:web": "npm run test --workspace=apps/web-canvas-threes",
+    "dev:web": "npm run dev --workspace=apps/web-canvas-threes",
+    "dev:rn": "npm run start --workspace=apps/rn-expo-threes"
+  }
+}
