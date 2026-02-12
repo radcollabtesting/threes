@@ -7,7 +7,7 @@
  *   2. Drag: tiles at interpolated positions following pointer progress
  */
 
-import type { CellValue, Grid, Direction } from '@threes/game-logic';
+import { scoreTile, type CellValue, type Grid, type Direction } from '@threes/game-logic';
 import { COLORS, SIZES, BOARD, tileColors, ANIMATION, BUTTON, SCORE_LIST } from '@threes/design-tokens';
 import type { AnimState } from './animation';
 import type { DragState, TilePreview } from './drag';
@@ -163,6 +163,23 @@ export class Renderer {
     if (gameOver) {
       ctx.fillStyle = 'rgba(0,0,0,0.7)';
       ctx.fillRect(0, 0, vw, vh);
+
+      // ── Per-tile score labels ────────────────────────────
+      const scoreFont = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (let r = 0; r < SIZES.gridSize; r++) {
+        for (let c = 0; c < SIZES.gridSize; c++) {
+          const val = grid[r][c];
+          if (val < 3) continue;
+          const pts = scoreTile(val);
+          const tx = bx + c * (tw + gx) + tw / 2;
+          const ty = by + r * (th + gy) + th * 0.25;
+          ctx.font = `bold ${14 * s}px ${scoreFont}`;
+          ctx.fillText(`+${pts}`, tx, ty);
+        }
+      }
 
       const cx = vw / 2;
       const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
