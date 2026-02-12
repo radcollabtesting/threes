@@ -57,7 +57,11 @@ let gameOverData: GameOverData | null = null;
 function onGameOver(): void {
   const finalScore = sumGrid(game.grid);
   const { scores, newIndex } = saveScore(finalScore);
-  gameOverData = { currentScore: finalScore, scores, currentScoreIndex: newIndex };
+  // Sort scores descending; track the current game's entry by reference
+  const currentEntry = scores[newIndex];
+  const sorted = [...scores].sort((a, b) => b.score - a.score);
+  const sortedIndex = sorted.indexOf(currentEntry);
+  gameOverData = { currentScore: finalScore, scores: sorted, currentScoreIndex: sortedIndex };
 }
 
 /* ── Input handlers ────────────────────────────────────── */
