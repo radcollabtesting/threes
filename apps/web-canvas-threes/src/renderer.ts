@@ -7,7 +7,7 @@
  *   2. Drag: tiles at interpolated positions following pointer progress
  */
 
-import type { CellValue, Grid, Direction } from '@threes/game-logic';
+import { scoreTile, type CellValue, type Grid, type Direction } from '@threes/game-logic';
 import { COLORS, SIZES, BOARD, tileColors, ANIMATION, BUTTON, SCORE_LIST } from '@threes/design-tokens';
 import type { AnimState } from './animation';
 import type { DragState, TilePreview } from './drag';
@@ -161,8 +161,29 @@ export class Renderer {
     this._newGameBtnBounds = null;
 
     if (gameOver) {
-      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
       ctx.fillRect(0, 0, vw, vh);
+
+      // Redraw tiles with per-tile score badges
+      for (let r = 0; r < SIZES.gridSize; r++) {
+        for (let c = 0; c < SIZES.gridSize; c++) {
+          const val = grid[r][c];
+          if (val === 0) continue;
+          const tx = bx + c * (tw + gx);
+          const ty = by + r * (th + gy);
+          this.drawTile(tx, ty, tw, th, br, s, val, 1, 1);
+
+          const pts = scoreTile(val);
+          if (pts > 0) {
+            ctx.fillStyle = '#FFD700';
+            const badgeFont = Math.max(10, 11 * s);
+            ctx.font = `bold ${badgeFont}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`+${pts}`, tx + tw / 2, ty + th * 0.24);
+          }
+        }
+      }
 
       const cx = vw / 2;
       const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';

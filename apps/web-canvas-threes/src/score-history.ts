@@ -25,7 +25,7 @@ export function loadScores(): ScoreEntry[] {
 }
 
 /**
- * Save a new score. Returns the updated list (newest first)
+ * Save a new score. Returns the updated list (sorted descending)
  * and the index of the newly added entry.
  */
 export function saveScore(score: number): { scores: ScoreEntry[]; newIndex: number } {
@@ -34,11 +34,13 @@ export function saveScore(score: number): { scores: ScoreEntry[]; newIndex: numb
     score,
     date: new Date().toISOString(),
   };
-  scores.unshift(entry);
+  scores.push(entry);
+  scores.sort((a, b) => b.score - a.score);
+  const newIndex = scores.indexOf(entry);
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(scores));
   } catch {
     // localStorage unavailable — scores won't persist
   }
-  return { scores, newIndex: 0 };
+  return { scores, newIndex };
 }

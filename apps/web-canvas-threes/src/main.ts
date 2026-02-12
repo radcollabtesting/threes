@@ -11,7 +11,7 @@
  * Touch/mouse: drag to preview, release past 50% to commit.
  */
 
-import { ThreesGame, cloneGrid, sumGrid, type Direction } from '@threes/game-logic';
+import { ThreesGame, cloneGrid, scoreGrid, type Direction } from '@threes/game-logic';
 import { Renderer } from './renderer';
 import {
   createAnimState,
@@ -55,7 +55,7 @@ let game = new ThreesGame({ seed, fixtureMode, nextTileStrategy, scoringEnabled 
 let gameOverData: GameOverData | null = null;
 
 function onGameOver(): void {
-  const finalScore = sumGrid(game.grid);
+  const finalScore = scoreGrid(game.grid);
   const { scores, newIndex } = saveScore(finalScore);
   gameOverData = { currentScore: finalScore, scores, currentScoreIndex: newIndex };
 }
