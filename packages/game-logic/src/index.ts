@@ -5,7 +5,7 @@ export { applyMove, isValidMove, hasAnyValidMove, directionDelta } from './move'
 export { canMerge, mergeResult } from './merge';
 export { selectSpawnPosition, getSpawnEdgeCells } from './spawn';
 export { createNextTileGenerator, type ProgressiveGenerator } from './next-tile';
-export { scoreTile, scoreGrid } from './score';
+export { scoreTile, scoreGrid, sumGrid } from './score';
 export {
   createEmptyGrid,
   cloneGrid,

@@ -29,3 +29,14 @@ export function scoreGrid(grid: Grid): number {
   }
   return Math.round(total); // round to avoid floating-point noise
 }
+
+/** Simple sum of all tile values on the grid. */
+export function sumGrid(grid: Grid): number {
+  let total = 0;
+  for (const row of grid) {
+    for (const cell of row) {
+      total += cell;
+    }
+  }
+  return total;
+}

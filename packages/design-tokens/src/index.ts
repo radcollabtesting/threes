@@ -78,6 +78,29 @@ export const ANIMATION = {
   shakeAmplitude: 4,
 } as const;
 
+/* ── Button tokens ────────────────────────────────────── */
+
+export const BUTTON = {
+  width: 160,
+  height: 44,
+  borderRadius: 8,
+  fontSize: 16,
+  fill: '#FFFFFF',
+  text: '#000000',
+} as const;
+
+/* ── Score list tokens (game-over overlay) ────────────── */
+
+export const SCORE_LIST = {
+  fontSize: 14,
+  lineHeight: 22,
+  highlightFill: '#5491FE',
+  highlightText: '#FFFFFF',
+  normalText: '#AAAAAA',
+  headerFontSize: 18,
+  maxVisible: 8,
+} as const;
+
 /* ── Input thresholds ──────────────────────────────────── */
 
 export const INPUT = {

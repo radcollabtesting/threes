@@ -11,7 +11,7 @@
  * Touch/mouse: drag to preview, release past 50% to commit.
  */
 
-import { ThreesGame, cloneGrid, type Direction } from '@threes/game-logic';
+import { ThreesGame, cloneGrid, sumGrid, type Direction } from '@threes/game-logic';
 import { Renderer } from './renderer';
 import {
   createAnimState,
@@ -32,6 +32,8 @@ import {
   COMMIT_THRESHOLD,
   type DragState,
 } from './drag';
+import { saveScore } from './score-history';
+import type { GameOverData } from './renderer';
 
 /* ── Parse query-param config ──────────────────────────── */
 
@@ -50,6 +52,13 @@ const anim: AnimState = createAnimState();
 const drag: DragState = createDragState();
 
 let game = new ThreesGame({ seed, fixtureMode, nextTileStrategy, scoringEnabled });
+let gameOverData: GameOverData | null = null;
+
+function onGameOver(): void {
+  const finalScore = sumGrid(game.grid);
+  const { scores, newIndex } = saveScore(finalScore);
+  gameOverData = { currentScore: finalScore, scores, currentScoreIndex: newIndex };
+}
 
 /* ── Input handlers ────────────────────────────────────── */
 
@@ -65,16 +74,16 @@ function handleInstantMove(direction: Direction): void {
   if (success) {
     triggerMoveAnimations(game.lastMoveEvents, anim, direction);
     triggerNextTileAnim(anim, oldNext, game.nextTile);
+    if ((game.status as string) === 'ended') onGameOver();
   } else {
     triggerShake(anim);
   }
 }
 
-function handleRestart(): void {
-  if (game.status === 'ended') {
-    game.restart();
-    resetDrag(drag);
-  }
+function handleNewGame(): void {
+  game.restart();
+  resetDrag(drag);
+  gameOverData = null;
 }
 
 /**
@@ -152,13 +161,26 @@ function handleDragEnd(): void {
 
 const inputCallbacks: InputCallbacks = {
   onInstantMove: handleInstantMove,
-  onRestart: handleRestart,
+  onRestart: handleNewGame,
   onDragStart: handleDragStart,
   onDragMove: handleDragMove,
   onDragEnd: handleDragEnd,
 };
 
 setupInput(canvas, inputCallbacks);
+
+/* ── "New Game" button click ──────────────────────────── */
+
+canvas.addEventListener('click', (e: MouseEvent) => {
+  const bounds = renderer.newGameButtonBounds;
+  if (!bounds) return;
+  if (
+    e.clientX >= bounds.x && e.clientX <= bounds.x + bounds.w &&
+    e.clientY >= bounds.y && e.clientY <= bounds.y + bounds.h
+  ) {
+    handleNewGame();
+  }
+});
 
 /* ── Resize ────────────────────────────────────────────── */
 
@@ -185,6 +207,7 @@ function loop(now: number): void {
         game.move(direction);
         triggerSpawnOnly(game.lastMoveEvents, anim, direction);
         triggerNextTileAnim(anim, oldNext, game.nextTile);
+        if (game.status === 'ended') onGameOver();
       } else {
         // Cancel — shake if the move was invalid
         const wasInvalid = drag.preview && !drag.preview.valid;
@@ -206,6 +229,7 @@ function loop(now: number): void {
     game.status === 'ended',
     anim,
     drag.phase === 'dragging' || drag.phase === 'snapping' ? drag : null,
+    gameOverData,
   );
 
   requestAnimationFrame(loop);
