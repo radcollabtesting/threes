@@ -103,7 +103,7 @@ function createProgressiveGenerator(rng: () => number): ProgressiveGenerator {
     let r = rng() * total;
     for (const e of entries) {
       r -= e.w;
-      if (r <= 0) return e.value;
+      if (r < 0) return e.value;
     }
     // Fallback (shouldn't happen due to floating point, but safe)
     return entries[entries.length - 1].value;
