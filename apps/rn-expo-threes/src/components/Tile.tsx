@@ -119,5 +119,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
   },
-  hintDot: {},
+  hintDot: {
+    borderWidth: 0.5,
+    borderColor: '#000000',
+  },
 });

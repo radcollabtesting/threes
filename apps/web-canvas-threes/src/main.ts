@@ -40,7 +40,7 @@ import type { GameOverData } from './renderer';
 
 const params = new URLSearchParams(window.location.search);
 
-const seed = parseInt(params.get('seed') ?? '42', 10);
+const seed = parseInt(params.get('seed') ?? String(Math.floor(Math.random() * 2147483647)), 10);
 const fixtureMode = params.get('fixture') === '1';
 const nextTileStrategy = (params.get('strategy') ?? 'progressive') as 'bag' | 'random' | 'progressive';
 const scoringEnabled = params.get('score') !== '0'; // scoring on by default

@@ -454,6 +454,9 @@ export class Renderer {
         ctx.beginPath();
         ctx.arc(hx, hy, hintR, 0, Math.PI * 2);
         ctx.fill();
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 0.5 * s;
+        ctx.stroke();
         hx += hintR * 2 + hintGap;
       }
     }

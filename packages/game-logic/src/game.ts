@@ -168,11 +168,12 @@ export class ThreesGame {
   }
 
   /**
-   * Restarts the game, re-seeding the RNG so the initial board
-   * is identical to the first time this seed was used.
+   * Restarts the game with a fresh random seed so each new game
+   * has a unique board layout.
    */
   restart(): void {
-    this._rng = createRng(this.config.seed);
+    const newSeed = Math.floor(Math.random() * 2147483647);
+    this._rng = createRng(newSeed);
     this._nextTileGen = createNextTileGenerator(
       this.config.nextTileStrategy,
       this._rng,
@@ -211,7 +212,7 @@ export class ThreesGame {
   private _placeRandomStartTiles(): void {
     const count = this.config.startTilesCount > 0
       ? this.config.startTilesCount
-      : randomInt(3, 5, this._rng); // 3, 4, or 5
+      : randomInt(2, 5, this._rng); // 2, 3, 4, or 5
 
     const maxTiles = Math.min(
       count,

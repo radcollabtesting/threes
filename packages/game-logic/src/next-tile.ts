@@ -2,8 +2,8 @@ import type { CellValue, Grid, NextTileStrategy } from './types';
 import { shuffleArray } from '@threes/rng';
 import {
   CYAN, MAGENTA, YELLOW,
-  BASE_TILES, PRIMARY_TILES, SECONDARY_TILES,
-  tileTier,
+  BASE_TILES,
+  tileTier, tileColorIndex, encodeTile,
 } from './color';
 
 /**
@@ -63,24 +63,30 @@ function createRandomGenerator(rng: () => number): (grid: Grid) => CellValue {
 
 /**
  * PROGRESSIVE generator:
- *   Scans the board for highest tier present and unlocks accordingly.
+ *   Scans the board for specific colors present and only spawns those.
  *   - Always ≥50% chance of base (C, M, Y).
- *   - If any primary on board: remaining chance includes primaries.
- *   - If any secondary on board: remaining chance also includes secondaries.
- *   Weights: 50% base, 25% primary (if unlocked), 25% secondary (if unlocked).
- *   If only primary unlocked: 50% base, 50% primary.
+ *   - If any primary colors exist on board: remaining chance picks from
+ *     only the specific primaries the player has created.
+ *   - Same for secondaries.
+ *   Weights: 50% base, 25% primary (if any), 25% secondary (if any).
+ *   If only primaries seen: 50% base, 50% primary.
  *   Always consumes exactly 2 rng calls for determinism.
  */
 function createProgressiveGenerator(rng: () => number): (grid: Grid) => CellValue {
   return function nextProgressive(grid: Grid): CellValue {
-    let hasPrimary = false;
-    let hasSecondary = false;
+    const seenPrimaries: CellValue[] = [];
+    const seenSecondaries: CellValue[] = [];
+    const seen = new Set<number>();
+
     for (const row of grid) {
       for (const cell of row) {
         if (cell === 0) continue;
+        const ci = tileColorIndex(cell);
+        if (seen.has(ci)) continue;
+        seen.add(ci);
         const tier = tileTier(cell);
-        if (tier >= 1) hasPrimary = true;
-        if (tier >= 2) hasSecondary = true;
+        if (tier === 1) seenPrimaries.push(encodeTile(ci, 0));
+        if (tier === 2) seenSecondaries.push(encodeTile(ci, 0));
       }
     }
 
@@ -88,14 +94,14 @@ function createProgressiveGenerator(rng: () => number): (grid: Grid) => CellValu
     const tierRoll = rng();
     const tileRoll = rng();
 
-    if (!hasPrimary || tierRoll < 0.5) {
+    if (seenPrimaries.length === 0 || tierRoll < 0.5) {
       return BASE_TILES[Math.floor(tileRoll * BASE_TILES.length)];
     }
 
-    if (!hasSecondary || tierRoll < 0.75) {
-      return PRIMARY_TILES[Math.floor(tileRoll * PRIMARY_TILES.length)];
+    if (seenSecondaries.length === 0 || tierRoll < 0.75) {
+      return seenPrimaries[Math.floor(tileRoll * seenPrimaries.length)];
     }
 
-    return SECONDARY_TILES[Math.floor(tileRoll * SECONDARY_TILES.length)];
+    return seenSecondaries[Math.floor(tileRoll * seenSecondaries.length)];
   };
 }
