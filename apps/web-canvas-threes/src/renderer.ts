@@ -5,7 +5,7 @@
  * Tile colors are computed dynamically from the color encoding system.
  */
 
-import { scoreTile, tileHex, tileTextColor, tileLabel, tileDots, getMergePartners, encodeTile, type CellValue, type Grid, type Direction } from '@threes/game-logic';
+import { scoreTile, tileHex, tileTextColor, tileLabel, tileDots, getMergePartners, encodeTile, canMerge, tileColorIndex, type CellValue, type Grid, type Direction } from '@threes/game-logic';
 import { COLORS, SIZES, BOARD, ANIMATION, BUTTON, SCORE_LIST } from '@threes/design-tokens';
 import type { AnimState } from './animation';
 import type { DragState, TilePreview } from './drag';
@@ -327,6 +327,10 @@ export class Renderer {
         }
 
         this.drawTile(x, y, tw, th, br, s, val, tileScale, alpha);
+
+        // Draw merge direction indicators based on grid neighbours
+        const indicators = this.getMergeIndicators(grid, r, c);
+        this.drawMergeIndicators(x, y, tw, th, s, indicators);
       }
     }
   }
@@ -344,6 +348,14 @@ export class Renderer {
     const preview = drag.preview!;
     const progress = drag.progress;
 
+    // Build a virtual grid from preview tile from-positions for indicators
+    const virtualGrid: Grid = Array.from({ length: SIZES.gridSize }, () =>
+      Array.from({ length: SIZES.gridSize }, () => 0 as CellValue),
+    );
+    for (const tp of preview.tiles.values()) {
+      virtualGrid[tp.fromRow][tp.fromCol] = tp.value;
+    }
+
     if (!preview.valid) {
       // ── Invalid move: rubber-band all tiles uniformly ───
       const [dr, dc] = directionOffset(preview.direction);
@@ -354,6 +366,8 @@ export class Renderer {
         const x = bx + tp.fromCol * (tw + gx) + offsetX;
         const y = by + tp.fromRow * (th + gy) + offsetY;
         this.drawTile(x, y, tw, th, br, s, tp.value, 1, 1);
+        const indicators = this.getMergeIndicators(virtualGrid, tp.fromRow, tp.fromCol);
+        this.drawMergeIndicators(x, y, tw, th, s, indicators);
       }
       return;
     }
@@ -371,6 +385,8 @@ export class Renderer {
       const x = bx + tp.fromCol * (tw + gx);
       const y = by + tp.fromRow * (th + gy);
       this.drawTile(x, y, tw, th, br, s, tp.value, 1, 1);
+      const indicators = this.getMergeIndicators(virtualGrid, tp.fromRow, tp.fromCol);
+      this.drawMergeIndicators(x, y, tw, th, s, indicators);
     }
 
     // Layer 2: moving tiles (on top — they slide over merge targets)
@@ -384,6 +400,8 @@ export class Renderer {
       const y = fromY + (toY - fromY) * progress;
 
       this.drawTile(x, y, tw, th, br, s, tp.value, 1, 1);
+      const indicators = this.getMergeIndicators(virtualGrid, tp.fromRow, tp.fromCol);
+      this.drawMergeIndicators(x, y, tw, th, s, indicators);
     }
   }
 
@@ -441,27 +459,116 @@ export class Renderer {
       }
     }
 
-    // Draw merge hint dots at bottom
-    const partners = getMergePartners(value);
-    if (partners.length > 0) {
-      const hintR = 2.5 * s;
-      const hintGap = 2 * s;
-      const totalW = partners.length * hintR * 2 + (partners.length - 1) * hintGap;
-      let hx = x + (w - totalW) / 2 + hintR;
-      const hy = y + h - 6 * s;
-      for (const ci of partners) {
-        ctx.fillStyle = tileHex(encodeTile(ci, 0));
-        ctx.beginPath();
-        ctx.arc(hx, hy, hintR, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 0.5 * s;
-        ctx.stroke();
-        hx += hintR * 2 + hintGap;
+    ctx.restore();
+  }
+
+  /**
+   * Compute merge direction indicators for a tile based on its row and column
+   * in the grid. Returns arrays of partner color indices grouped by side.
+   */
+  private getMergeIndicators(
+    grid: Grid, row: number, col: number,
+  ): { left: number[]; right: number[]; top: number[]; bottom: number[] } {
+    const value = grid[row][col];
+    const result = { left: [] as number[], right: [] as number[], top: [] as number[], bottom: [] as number[] };
+    if (value === 0) return result;
+
+    const addUnique = (arr: number[], ci: number) => {
+      if (!arr.includes(ci)) arr.push(ci);
+    };
+
+    // Scan left in same row
+    for (let c = 0; c < col; c++) {
+      const other = grid[row][c];
+      if (other !== 0 && canMerge(value, other)) {
+        addUnique(result.left, tileColorIndex(other));
+      }
+    }
+    // Scan right in same row
+    for (let c = col + 1; c < SIZES.gridSize; c++) {
+      const other = grid[row][c];
+      if (other !== 0 && canMerge(value, other)) {
+        addUnique(result.right, tileColorIndex(other));
+      }
+    }
+    // Scan up in same column
+    for (let r = 0; r < row; r++) {
+      const other = grid[r][col];
+      if (other !== 0 && canMerge(value, other)) {
+        addUnique(result.top, tileColorIndex(other));
+      }
+    }
+    // Scan down in same column
+    for (let r = row + 1; r < SIZES.gridSize; r++) {
+      const other = grid[r][col];
+      if (other !== 0 && canMerge(value, other)) {
+        addUnique(result.bottom, tileColorIndex(other));
       }
     }
 
-    ctx.restore();
+    return result;
+  }
+
+  /**
+   * Draw merge direction indicator lines on tile edges.
+   * Each line is 1px wide × 5px long (scaled), colored with the partner's color.
+   */
+  private drawMergeIndicators(
+    x: number, y: number, w: number, h: number, s: number,
+    indicators: { left: number[]; right: number[]; top: number[]; bottom: number[] },
+  ): void {
+    const ctx = this.ctx;
+    const lineW = 1 * s;
+    const lineL = 5 * s;
+    const gap = 2 * s;
+
+    // Left edge: vertical lines stacked vertically, centered
+    if (indicators.left.length > 0) {
+      const count = indicators.left.length;
+      const totalH = count * lineL + (count - 1) * gap;
+      let iy = y + (h - totalH) / 2;
+      for (const ci of indicators.left) {
+        ctx.fillStyle = tileHex(encodeTile(ci, 0));
+        ctx.fillRect(x, iy, lineW, lineL);
+        iy += lineL + gap;
+      }
+    }
+
+    // Right edge: vertical lines stacked vertically, centered
+    if (indicators.right.length > 0) {
+      const count = indicators.right.length;
+      const totalH = count * lineL + (count - 1) * gap;
+      let iy = y + (h - totalH) / 2;
+      for (const ci of indicators.right) {
+        ctx.fillStyle = tileHex(encodeTile(ci, 0));
+        ctx.fillRect(x + w - lineW, iy, lineW, lineL);
+        iy += lineL + gap;
+      }
+    }
+
+    // Top edge: horizontal lines stacked horizontally, centered
+    if (indicators.top.length > 0) {
+      const count = indicators.top.length;
+      const totalW = count * lineL + (count - 1) * gap;
+      let ix = x + (w - totalW) / 2;
+      for (const ci of indicators.top) {
+        ctx.fillStyle = tileHex(encodeTile(ci, 0));
+        ctx.fillRect(ix, y, lineL, lineW);
+        ix += lineL + gap;
+      }
+    }
+
+    // Bottom edge: horizontal lines stacked horizontally, centered
+    if (indicators.bottom.length > 0) {
+      const count = indicators.bottom.length;
+      const totalW = count * lineL + (count - 1) * gap;
+      let ix = x + (w - totalW) / 2;
+      for (const ci of indicators.bottom) {
+        ctx.fillStyle = tileHex(encodeTile(ci, 0));
+        ctx.fillRect(ix, y + h - lineW, lineL, lineW);
+        ix += lineL + gap;
+      }
+    }
   }
 
   private roundRect(
