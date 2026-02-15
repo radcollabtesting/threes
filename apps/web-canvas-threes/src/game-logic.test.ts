@@ -8,9 +8,9 @@ import { ThreesGame, canMerge, applyMove, type Grid } from '@threes/game-logic';
 
 describe('shared game-logic (vitest)', () => {
   test('canMerge rules work', () => {
-    expect(canMerge(1, 2)).toBe(true);
-    expect(canMerge(3, 3)).toBe(true);
-    expect(canMerge(1, 1)).toBe(false);
+    expect(canMerge(1, 2)).toBe(true);   // Cyan + Magenta → Blue
+    expect(canMerge(2, 3)).toBe(true);   // Magenta + Yellow → Red
+    expect(canMerge(1, 1)).toBe(false);  // Cyan + Cyan → blocked
   });
 
   test('one-step movement', () => {
@@ -26,7 +26,9 @@ describe('shared game-logic (vitest)', () => {
 
   test('fixture mode loads design board', () => {
     const game = new ThreesGame({ fixtureMode: true });
-    expect(game.grid[0]).toEqual([3, 3, 0, 2]);
+    // Fixture: [C, M, _, Y] with next = MAGENTA
+    // C=1, M=2, Y=3
+    expect(game.grid[0]).toEqual([1, 2, 0, 3]);
     expect(game.nextTile).toBe(2);
   });
 
