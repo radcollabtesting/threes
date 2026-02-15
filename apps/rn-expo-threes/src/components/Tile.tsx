@@ -33,6 +33,8 @@ export function Tile({ value, scale = 1 }: TileProps) {
           height: h,
           borderRadius: SIZES.tileBorderRadius * scale,
           backgroundColor: fill,
+          borderWidth: 2 * scale,
+          borderColor: '#000000',
         },
       ]}
       accessible
@@ -57,9 +59,9 @@ export function Tile({ value, scale = 1 }: TileProps) {
               style={[
                 styles.dot,
                 {
-                  width: 6 * scale,
-                  height: 6 * scale,
-                  borderRadius: 3 * scale,
+                  width: 3 * scale,
+                  height: 3 * scale,
+                  borderRadius: 1.5 * scale,
                   marginLeft: i > 0 ? 2 * scale : 0,
                 },
               ]}

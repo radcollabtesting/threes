@@ -433,6 +433,23 @@ export class Renderer {
 
     this.roundRect(x, y, w, h, r, fill);
 
+    // Draw 2px black border
+    const borderW = 2 * s;
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = borderW;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.stroke();
+
     // Only draw label for named colors (C, M, Y, R, G, B)
     if (label) {
       const fontSize = SIZES.tileFontSize * s;
@@ -446,7 +463,7 @@ export class Renderer {
     // Draw white dots in top-right corner (backward merge indicator)
     const dots = tileDots(value);
     if (dots > 0) {
-      const dotRadius = 3 * s;
+      const dotRadius = 1.5 * s;
       const dotGap = 2.5 * s;
       const dotStartX = x + w - 8 * s;
       const dotStartY = y + 8 * s;
@@ -511,15 +528,16 @@ export class Renderer {
 
   /**
    * Draw merge direction indicator lines on tile edges.
-   * Each line is 1px wide × 5px long (scaled), colored with the partner's color.
+   * Each line is 2px thick × 8px long (scaled), colored with the partner's color.
+   * Lines sit on top of the card's black border.
    */
   private drawMergeIndicators(
     x: number, y: number, w: number, h: number, s: number,
     indicators: { left: number[]; right: number[]; top: number[]; bottom: number[] },
   ): void {
     const ctx = this.ctx;
-    const lineW = 1 * s;
-    const lineL = 5 * s;
+    const lineW = 2 * s;
+    const lineL = 8 * s;
     const gap = 2 * s;
 
     // Left edge: vertical lines stacked vertically, centered

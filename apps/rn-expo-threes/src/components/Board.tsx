@@ -207,8 +207,8 @@ function AnimatedTile({
     outputRange: [0.5, 1],
   });
 
-  const lineW = 1 * scale;
-  const lineL = 5 * scale;
+  const lineW = 2 * scale;
+  const lineL = 8 * scale;
   const gap = 2 * scale;
 
   return (
@@ -221,6 +221,8 @@ function AnimatedTile({
         height: tileHeight,
         borderRadius,
         backgroundColor: fill,
+        borderWidth: 2 * scale,
+        borderColor: '#000000',
         justifyContent: 'center',
         alignItems: 'center',
         opacity: spawnAnim,
