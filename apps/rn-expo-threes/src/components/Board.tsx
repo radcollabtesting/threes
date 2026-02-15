@@ -9,6 +9,68 @@ import { View, Animated, StyleSheet, Easing } from 'react-native';
 import { COLORS, SIZES, ANIMATION } from '@threes/design-tokens';
 import { tileColors } from '@threes/design-tokens';
 import type { Grid, MoveEvent } from '@threes/game-logic';
+import { canMerge, tileColorIndex, tileHex, encodeTile } from '@threes/game-logic';
+
+interface MergeIndicator {
+  colorIndex: number;
+  blocked: boolean;
+}
+
+interface MergeIndicators {
+  left: MergeIndicator[];
+  right: MergeIndicator[];
+  top: MergeIndicator[];
+  bottom: MergeIndicator[];
+}
+
+function getMergeIndicators(grid: Grid, row: number, col: number): MergeIndicators {
+  const value = grid[row][col];
+  const result: MergeIndicators = { left: [], right: [], top: [], bottom: [] };
+  if (value === 0) return result;
+
+  const addUnique = (arr: MergeIndicator[], ci: number, blocked: boolean) => {
+    if (!arr.some(i => i.colorIndex === ci)) arr.push({ colorIndex: ci, blocked });
+  };
+
+  // Scan left (from col-1 toward 0)
+  let blocked = false;
+  for (let c = col - 1; c >= 0; c--) {
+    const other = grid[row][c];
+    if (other !== 0) {
+      if (canMerge(value, other)) addUnique(result.left, tileColorIndex(other), blocked);
+      blocked = true;
+    }
+  }
+  // Scan right (from col+1 toward end)
+  blocked = false;
+  for (let c = col + 1; c < SIZES.gridSize; c++) {
+    const other = grid[row][c];
+    if (other !== 0) {
+      if (canMerge(value, other)) addUnique(result.right, tileColorIndex(other), blocked);
+      blocked = true;
+    }
+  }
+  // Scan up (from row-1 toward 0)
+  blocked = false;
+  for (let r = row - 1; r >= 0; r--) {
+    const other = grid[r][col];
+    if (other !== 0) {
+      if (canMerge(value, other)) addUnique(result.top, tileColorIndex(other), blocked);
+      blocked = true;
+    }
+  }
+  // Scan down (from row+1 toward end)
+  blocked = false;
+  for (let r = row + 1; r < SIZES.gridSize; r++) {
+    const other = grid[r][col];
+    if (other !== 0) {
+      if (canMerge(value, other)) addUnique(result.bottom, tileColorIndex(other), blocked);
+      blocked = true;
+    }
+  }
+
+  return result;
+}
 
 interface BoardProps {
   grid: Grid;
@@ -16,9 +78,11 @@ interface BoardProps {
   scale: number;
   /** Triggers a shake animation when incremented */
   shakeCounter: number;
+  /** When true, letter labels shown on tiles (default true) */
+  colorBlindMode?: boolean;
 }
 
-export function Board({ grid, moveEvents, scale, shakeCounter }: BoardProps) {
+export function Board({ grid, moveEvents, scale, shakeCounter, colorBlindMode = true }: BoardProps) {
   const s = scale;
   const tw = SIZES.tileWidth * s;
   const th = SIZES.tileHeight * s;
@@ -98,6 +162,7 @@ export function Board({ grid, moveEvents, scale, shakeCounter }: BoardProps) {
           if (val === 0) return null;
           const key = `${r},${c}`;
           const isSpawn = spawnKeys.has(key);
+          const indicators = getMergeIndicators(grid, r, c);
           return (
             <AnimatedTile
               key={`tile-${r}-${c}-${val}`}
@@ -111,6 +176,8 @@ export function Board({ grid, moveEvents, scale, shakeCounter }: BoardProps) {
               borderRadius={br}
               scale={s}
               animateSpawn={isSpawn}
+              indicators={indicators}
+              colorBlindMode={colorBlindMode}
             />
           );
         }),
@@ -132,12 +199,14 @@ interface AnimatedTileProps {
   borderRadius: number;
   scale: number;
   animateSpawn: boolean;
+  indicators: MergeIndicators;
+  colorBlindMode: boolean;
 }
 
 function AnimatedTile({
   value, row, col,
   tileWidth, tileHeight, gapX, gapY, borderRadius,
-  scale, animateSpawn,
+  scale, animateSpawn, indicators, colorBlindMode,
 }: AnimatedTileProps) {
   const { fill, text } = tileColors(value);
   const fontSize = value >= 100
@@ -167,6 +236,24 @@ function AnimatedTile({
     outputRange: [0.5, 1],
   });
 
+  const lineW = 4 * scale;
+  const lineL = 8 * scale;
+  const lineGap = 2 * scale;
+
+  // Renders a solid indicator line, with 50% opacity if blocked
+  const renderLine = (ind: MergeIndicator, isVertical: boolean) => {
+    const color = tileHex(encodeTile(ind.colorIndex, 0));
+    return (
+      <View
+        key={ind.colorIndex}
+        style={isVertical
+          ? { width: lineW, height: lineL, marginVertical: lineGap / 2, backgroundColor: color, opacity: ind.blocked ? 0.5 : 1 }
+          : { width: lineL, height: lineW, marginHorizontal: lineGap / 2, backgroundColor: color, opacity: ind.blocked ? 0.5 : 1 }
+        }
+      />
+    );
+  };
+
   return (
     <Animated.View
       style={{
@@ -177,6 +264,8 @@ function AnimatedTile({
         height: tileHeight,
         borderRadius,
         backgroundColor: fill,
+        borderWidth: 2 * scale,
+        borderColor: '#000000',
         justifyContent: 'center',
         alignItems: 'center',
         opacity: spawnAnim,
@@ -194,6 +283,28 @@ function AnimatedTile({
       >
         {value}
       </Animated.Text>
+
+      {/* Merge direction indicators */}
+      {indicators.left.length > 0 && (
+        <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, justifyContent: 'center' }}>
+          {indicators.left.map(ind => renderLine(ind, true))}
+        </View>
+      )}
+      {indicators.right.length > 0 && (
+        <View style={{ position: 'absolute', right: 0, top: 0, bottom: 0, justifyContent: 'center' }}>
+          {indicators.right.map(ind => renderLine(ind, true))}
+        </View>
+      )}
+      {indicators.top.length > 0 && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center' }}>
+          {indicators.top.map(ind => renderLine(ind, false))}
+        </View>
+      )}
+      {indicators.bottom.length > 0 && (
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center' }}>
+          {indicators.bottom.map(ind => renderLine(ind, false))}
+        </View>
+      )}
     </Animated.View>
   );
 }

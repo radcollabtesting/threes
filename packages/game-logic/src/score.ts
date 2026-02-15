@@ -4,12 +4,12 @@ import { tileTier, tileDots } from './color';
 /**
  * Computes the score for a single tile.
  *
- * Score = 3^(tier+1) * 3^dots
+ * Score = 3^(tier+1) * 1.5^dots
  *
  * Tier 0 (base C/M/Y):        3^1 =   3
  * Tier 1 (primary R/G/B):     3^2 =   9
  * Tier 2 (secondary):         3^3 =  27
- * Dots multiply: each dot adds another 3x.
+ * Dots multiply: each dot adds another 1.5x.
  * Tier -1 (Black / empty):    0
  */
 export function scoreTile(value: CellValue): number {
@@ -17,7 +17,7 @@ export function scoreTile(value: CellValue): number {
   const tier = tileTier(value);
   if (tier < 0) return 0; // Black / dead tiles score nothing
   const dots = tileDots(value);
-  return Math.pow(3, tier + 1) * Math.pow(3, dots);
+  return Math.round(Math.pow(3, tier + 1) * Math.pow(1.5, dots));
 }
 
 /** Computes the total score across all tiles on the grid */

@@ -102,9 +102,11 @@ LABEL_MAP[YELLOW_IDX] = 'Y';
 LABEL_MAP[BLUE_IDX] = 'B';
 LABEL_MAP[RED_IDX] = 'R';
 LABEL_MAP[GREEN_IDX] = 'G';
-// Secondaries: no letter label (just show color)
+LABEL_MAP[ORANGE_IDX] = 'O';
+LABEL_MAP[VIOLET_IDX] = 'V';
+LABEL_MAP[INDIGO_IDX] = 'I';
 
-/** Returns single-letter label for base/primary colors, null otherwise. */
+/** Returns single-letter label for named colors, null otherwise. */
 export function tileLabel(id: CellValue): string | null {
   if (id === 0) return null;
   return LABEL_MAP[tileColorIndex(id)] ?? null;

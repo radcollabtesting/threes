@@ -199,6 +199,13 @@ canvas.addEventListener('click', (e: MouseEvent) => {
   }
 });
 
+/* ── Color blind mode toggle ──────────────────────────── */
+
+const cbCheck = document.getElementById('cb-check') as HTMLInputElement;
+cbCheck.addEventListener('change', () => {
+  renderer.colorBlindMode = cbCheck.checked;
+});
+
 /* ── Resize ────────────────────────────────────────────── */
 
 window.addEventListener('resize', () => renderer.resize());

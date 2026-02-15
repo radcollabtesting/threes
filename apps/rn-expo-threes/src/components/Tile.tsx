@@ -8,14 +8,16 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SIZES } from '@threes/design-tokens';
-import { tileHex, tileTextColor, tileLabel, tileDots, getMergePartners, encodeTile } from '@threes/game-logic';
+import { tileHex, tileTextColor, tileLabel, tileDots } from '@threes/game-logic';
 
 interface TileProps {
   value: number;
   scale?: number;
+  /** When true, letter labels shown on tiles (default true) */
+  colorBlindMode?: boolean;
 }
 
-export function Tile({ value, scale = 1 }: TileProps) {
+export function Tile({ value, scale = 1, colorBlindMode = true }: TileProps) {
   const fill = tileHex(value);
   const textColor = tileTextColor(value);
   const label = tileLabel(value);
@@ -33,13 +35,15 @@ export function Tile({ value, scale = 1 }: TileProps) {
           height: h,
           borderRadius: SIZES.tileBorderRadius * scale,
           backgroundColor: fill,
+          borderWidth: 2 * scale,
+          borderColor: '#000000',
         },
       ]}
       accessible
       accessibilityLabel={label ? `Tile ${label}${dots > 0 ? ` ${dots} dot${dots > 1 ? 's' : ''}` : ''}` : `Color tile`}
       accessibilityRole="text"
     >
-      {label && (
+      {colorBlindMode && label && (
         <Text
           style={[
             styles.text,
@@ -67,29 +71,6 @@ export function Tile({ value, scale = 1 }: TileProps) {
           ))}
         </View>
       )}
-      {(() => {
-        const partners = getMergePartners(value);
-        if (partners.length === 0) return null;
-        return (
-          <View style={styles.hintsContainer}>
-            {partners.map((ci, i) => (
-              <View
-                key={ci}
-                style={[
-                  styles.hintDot,
-                  {
-                    backgroundColor: tileHex(encodeTile(ci, 0)),
-                    width: 5 * scale,
-                    height: 5 * scale,
-                    borderRadius: 2.5 * scale,
-                    marginLeft: i > 0 ? 2 * scale : 0,
-                  },
-                ]}
-              />
-            ))}
-          </View>
-        );
-      })()}
     </View>
   );
 }
@@ -110,17 +91,5 @@ const styles = StyleSheet.create({
   },
   dot: {
     backgroundColor: '#FFFFFF',
-  },
-  hintsContainer: {
-    position: 'absolute',
-    bottom: 4,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  hintDot: {
-    borderWidth: 0.5,
-    borderColor: '#000000',
   },
 });

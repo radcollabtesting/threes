@@ -5,7 +5,7 @@
  * Tile colors are computed dynamically from the color encoding system.
  */
 
-import { scoreTile, tileHex, tileTextColor, tileLabel, tileDots, getMergePartners, encodeTile, type CellValue, type Grid, type Direction } from '@threes/game-logic';
+import { scoreTile, tileHex, tileTextColor, tileLabel, tileDots, getMergePartners, encodeTile, canMerge, tileColorIndex, mergeResult, type CellValue, type Grid, type Direction } from '@threes/game-logic';
 import { COLORS, SIZES, BOARD, ANIMATION, BUTTON, SCORE_LIST } from '@threes/design-tokens';
 import type { AnimState } from './animation';
 import type { DragState, TilePreview } from './drag';
@@ -17,6 +17,18 @@ export interface GameOverData {
   currentScoreIndex: number;
 }
 
+interface MergeIndicator {
+  colorIndex: number;
+  blocked: boolean;
+}
+
+interface MergeIndicatorSet {
+  left: MergeIndicator[];
+  right: MergeIndicator[];
+  top: MergeIndicator[];
+  bottom: MergeIndicator[];
+}
+
 export class Renderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -24,6 +36,9 @@ export class Renderer {
   private _boardX = 0;
   private _boardY = 0;
   private _newGameBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
+
+  /** When true (default), color letter labels are shown on tiles. */
+  colorBlindMode = true;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -327,6 +342,10 @@ export class Renderer {
         }
 
         this.drawTile(x, y, tw, th, br, s, val, tileScale, alpha);
+
+        // Draw merge direction indicators based on grid neighbours
+        const indicators = this.getMergeIndicators(grid, r, c);
+        this.drawMergeIndicators(x, y, tw, th, s, indicators);
       }
     }
   }
@@ -344,6 +363,14 @@ export class Renderer {
     const preview = drag.preview!;
     const progress = drag.progress;
 
+    // Build a virtual grid from preview tile from-positions for indicators
+    const virtualGrid: Grid = Array.from({ length: SIZES.gridSize }, () =>
+      Array.from({ length: SIZES.gridSize }, () => 0 as CellValue),
+    );
+    for (const tp of preview.tiles.values()) {
+      virtualGrid[tp.fromRow][tp.fromCol] = tp.value;
+    }
+
     if (!preview.valid) {
       // ── Invalid move: rubber-band all tiles uniformly ───
       const [dr, dc] = directionOffset(preview.direction);
@@ -354,6 +381,8 @@ export class Renderer {
         const x = bx + tp.fromCol * (tw + gx) + offsetX;
         const y = by + tp.fromRow * (th + gy) + offsetY;
         this.drawTile(x, y, tw, th, br, s, tp.value, 1, 1);
+        const indicators = this.getMergeIndicators(virtualGrid, tp.fromRow, tp.fromCol);
+        this.drawMergeIndicators(x, y, tw, th, s, indicators);
       }
       return;
     }
@@ -371,6 +400,8 @@ export class Renderer {
       const x = bx + tp.fromCol * (tw + gx);
       const y = by + tp.fromRow * (th + gy);
       this.drawTile(x, y, tw, th, br, s, tp.value, 1, 1);
+      const indicators = this.getMergeIndicators(virtualGrid, tp.fromRow, tp.fromCol);
+      this.drawMergeIndicators(x, y, tw, th, s, indicators);
     }
 
     // Layer 2: moving tiles (on top — they slide over merge targets)
@@ -384,6 +415,79 @@ export class Renderer {
       const y = fromY + (toY - fromY) * progress;
 
       this.drawTile(x, y, tw, th, br, s, tp.value, 1, 1);
+      const indicators = this.getMergeIndicators(virtualGrid, tp.fromRow, tp.fromCol);
+      this.drawMergeIndicators(x, y, tw, th, s, indicators);
+    }
+
+    // Layer 3: merge result preview at tile intersections
+    for (const ev of preview.moveEvents) {
+      if (ev.type !== 'merge' || !ev.from) continue;
+
+      const movingTp = preview.tiles.get(`${ev.from.row},${ev.from.col}`);
+      if (!movingTp) continue;
+
+      // Moving tile's current interpolated position
+      const mFromX = bx + movingTp.fromCol * (tw + gx);
+      const mFromY = by + movingTp.fromRow * (th + gy);
+      const mToX = bx + movingTp.toCol * (tw + gx);
+      const mToY = by + movingTp.toRow * (th + gy);
+      const mx = mFromX + (mToX - mFromX) * progress;
+      const my = mFromY + (mToY - mFromY) * progress;
+
+      // Merge target tile position (stationary)
+      const tx = bx + ev.to.col * (tw + gx);
+      const ty = by + ev.to.row * (th + gy);
+
+      // Compute overlap rectangle
+      const overlapLeft = Math.max(mx, tx);
+      const overlapTop = Math.max(my, ty);
+      const overlapRight = Math.min(mx + tw, tx + tw);
+      const overlapBottom = Math.min(my + th, ty + th);
+
+      const ow = overlapRight - overlapLeft;
+      const oh = overlapBottom - overlapTop;
+
+      if (ow > 0 && oh > 0) {
+        const resultValue = ev.value;
+        const resultColor = tileHex(resultValue);
+        const resultLabel = tileLabel(resultValue);
+        const resultTextColor = tileTextColor(resultValue);
+        const overlapBr = Math.min(br, ow / 2, oh / 2);
+
+        const ctx = this.ctx;
+        ctx.save();
+
+        // Fill with rounded rect matching card style
+        this.roundRect(overlapLeft, overlapTop, ow, oh, overlapBr, resultColor);
+
+        // Draw 2px black border
+        const borderW = 2 * s;
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = borderW;
+        ctx.beginPath();
+        ctx.moveTo(overlapLeft + overlapBr, overlapTop);
+        ctx.lineTo(overlapLeft + ow - overlapBr, overlapTop);
+        ctx.quadraticCurveTo(overlapLeft + ow, overlapTop, overlapLeft + ow, overlapTop + overlapBr);
+        ctx.lineTo(overlapLeft + ow, overlapTop + oh - overlapBr);
+        ctx.quadraticCurveTo(overlapLeft + ow, overlapTop + oh, overlapLeft + ow - overlapBr, overlapTop + oh);
+        ctx.lineTo(overlapLeft + overlapBr, overlapTop + oh);
+        ctx.quadraticCurveTo(overlapLeft, overlapTop + oh, overlapLeft, overlapTop + oh - overlapBr);
+        ctx.lineTo(overlapLeft, overlapTop + overlapBr);
+        ctx.quadraticCurveTo(overlapLeft, overlapTop, overlapLeft + overlapBr, overlapTop);
+        ctx.closePath();
+        ctx.stroke();
+
+        // Draw result label centered in overlap if there's enough room
+        if (this.colorBlindMode && resultLabel && ow > 8 * s && oh > 8 * s) {
+          const fontSize = SIZES.tileFontSize * s * Math.min(1, ow / tw, oh / th);
+          ctx.fillStyle = resultTextColor;
+          ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(resultLabel, overlapLeft + ow / 2, overlapTop + oh / 2);
+        }
+        ctx.restore();
+      }
     }
   }
 
@@ -415,8 +519,25 @@ export class Renderer {
 
     this.roundRect(x, y, w, h, r, fill);
 
-    // Only draw label for named colors (C, M, Y, R, G, B)
-    if (label) {
+    // Draw 2px black border
+    const borderW = 2 * s;
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = borderW;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Only draw label for named colors when color blind mode is on
+    if (this.colorBlindMode && label) {
       const fontSize = SIZES.tileFontSize * s;
       ctx.fillStyle = text;
       ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
@@ -441,27 +562,130 @@ export class Renderer {
       }
     }
 
-    // Draw merge hint dots at bottom
-    const partners = getMergePartners(value);
-    if (partners.length > 0) {
-      const hintR = 2.5 * s;
-      const hintGap = 2 * s;
-      const totalW = partners.length * hintR * 2 + (partners.length - 1) * hintGap;
-      let hx = x + (w - totalW) / 2 + hintR;
-      const hy = y + h - 6 * s;
-      for (const ci of partners) {
-        ctx.fillStyle = tileHex(encodeTile(ci, 0));
-        ctx.beginPath();
-        ctx.arc(hx, hy, hintR, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 0.5 * s;
-        ctx.stroke();
-        hx += hintR * 2 + hintGap;
+    ctx.restore();
+  }
+
+  /**
+   * Compute merge direction indicators for a tile based on its row and column
+   * in the grid. Scans outward from the tile in each direction, tracking
+   * whether any non-empty tile blocks the path to a merge partner.
+   */
+  private getMergeIndicators(
+    grid: Grid, row: number, col: number,
+  ): MergeIndicatorSet {
+    const value = grid[row][col];
+    const result: MergeIndicatorSet = { left: [], right: [], top: [], bottom: [] };
+    if (value === 0) return result;
+
+    const addUnique = (arr: MergeIndicator[], ci: number, blocked: boolean) => {
+      if (!arr.some(i => i.colorIndex === ci)) arr.push({ colorIndex: ci, blocked });
+    };
+
+    // Scan left (from col-1 toward 0)
+    let blocked = false;
+    for (let c = col - 1; c >= 0; c--) {
+      const other = grid[row][c];
+      if (other !== 0) {
+        if (canMerge(value, other)) addUnique(result.left, tileColorIndex(other), blocked);
+        blocked = true;
+      }
+    }
+    // Scan right (from col+1 toward end)
+    blocked = false;
+    for (let c = col + 1; c < SIZES.gridSize; c++) {
+      const other = grid[row][c];
+      if (other !== 0) {
+        if (canMerge(value, other)) addUnique(result.right, tileColorIndex(other), blocked);
+        blocked = true;
+      }
+    }
+    // Scan up (from row-1 toward 0)
+    blocked = false;
+    for (let r = row - 1; r >= 0; r--) {
+      const other = grid[r][col];
+      if (other !== 0) {
+        if (canMerge(value, other)) addUnique(result.top, tileColorIndex(other), blocked);
+        blocked = true;
+      }
+    }
+    // Scan down (from row+1 toward end)
+    blocked = false;
+    for (let r = row + 1; r < SIZES.gridSize; r++) {
+      const other = grid[r][col];
+      if (other !== 0) {
+        if (canMerge(value, other)) addUnique(result.bottom, tileColorIndex(other), blocked);
+        blocked = true;
       }
     }
 
-    ctx.restore();
+    return result;
+  }
+
+  /**
+   * Draw merge direction indicator lines on tile edges.
+   * Each line is 2px thick × 8px long (scaled), colored with the partner's color.
+   * Blocked indicators are drawn with black dashes over the color.
+   */
+  private drawMergeIndicators(
+    x: number, y: number, w: number, h: number, s: number,
+    indicators: MergeIndicatorSet,
+  ): void {
+    const ctx = this.ctx;
+    const lineW = 4 * s;
+    const lineL = 8 * s;
+    const gap = 2 * s;
+
+    // Helper: draw a solid line segment, with 50% opacity if blocked
+    const drawLine = (lx: number, ly: number, lw: number, lh: number, color: string, blocked: boolean) => {
+      if (blocked) ctx.globalAlpha = 0.5;
+      ctx.fillStyle = color;
+      ctx.fillRect(lx, ly, lw, lh);
+      if (blocked) ctx.globalAlpha = 1.0;
+    };
+
+    // Left edge: vertical lines stacked vertically, centered
+    if (indicators.left.length > 0) {
+      const count = indicators.left.length;
+      const totalH = count * lineL + (count - 1) * gap;
+      let iy = y + (h - totalH) / 2;
+      for (const ind of indicators.left) {
+        drawLine(x, iy, lineW, lineL, tileHex(encodeTile(ind.colorIndex, 0)), ind.blocked);
+        iy += lineL + gap;
+      }
+    }
+
+    // Right edge
+    if (indicators.right.length > 0) {
+      const count = indicators.right.length;
+      const totalH = count * lineL + (count - 1) * gap;
+      let iy = y + (h - totalH) / 2;
+      for (const ind of indicators.right) {
+        drawLine(x + w - lineW, iy, lineW, lineL, tileHex(encodeTile(ind.colorIndex, 0)), ind.blocked);
+        iy += lineL + gap;
+      }
+    }
+
+    // Top edge: horizontal lines stacked horizontally, centered
+    if (indicators.top.length > 0) {
+      const count = indicators.top.length;
+      const totalW = count * lineL + (count - 1) * gap;
+      let ix = x + (w - totalW) / 2;
+      for (const ind of indicators.top) {
+        drawLine(ix, y, lineL, lineW, tileHex(encodeTile(ind.colorIndex, 0)), ind.blocked);
+        ix += lineL + gap;
+      }
+    }
+
+    // Bottom edge
+    if (indicators.bottom.length > 0) {
+      const count = indicators.bottom.length;
+      const totalW = count * lineL + (count - 1) * gap;
+      let ix = x + (w - totalW) / 2;
+      for (const ind of indicators.bottom) {
+        drawLine(ix, y + h - lineW, lineL, lineW, tileHex(encodeTile(ind.colorIndex, 0)), ind.blocked);
+        ix += lineL + gap;
+      }
+    }
   }
 
   private roundRect(
