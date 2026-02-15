@@ -5,7 +5,7 @@
  * Tile colors are computed dynamically from the color encoding system.
  */
 
-import { scoreTile, tileHex, tileTextColor, tileLabel, tileDots, getMergePartners, encodeTile, canMerge, tileColorIndex, type CellValue, type Grid, type Direction } from '@threes/game-logic';
+import { scoreTile, tileHex, tileTextColor, tileLabel, tileDots, getMergePartners, encodeTile, canMerge, tileColorIndex, mergeResult, type CellValue, type Grid, type Direction } from '@threes/game-logic';
 import { COLORS, SIZES, BOARD, ANIMATION, BUTTON, SCORE_LIST } from '@threes/design-tokens';
 import type { AnimState } from './animation';
 import type { DragState, TilePreview } from './drag';
@@ -414,6 +414,58 @@ export class Renderer {
       this.drawTile(x, y, tw, th, br, s, tp.value, 1, 1);
       const indicators = this.getMergeIndicators(virtualGrid, tp.fromRow, tp.fromCol);
       this.drawMergeIndicators(x, y, tw, th, s, indicators);
+    }
+
+    // Layer 3: merge result preview at tile intersections
+    for (const ev of preview.moveEvents) {
+      if (ev.type !== 'merge' || !ev.from) continue;
+
+      const movingTp = preview.tiles.get(`${ev.from.row},${ev.from.col}`);
+      if (!movingTp) continue;
+
+      // Moving tile's current interpolated position
+      const mFromX = bx + movingTp.fromCol * (tw + gx);
+      const mFromY = by + movingTp.fromRow * (th + gy);
+      const mToX = bx + movingTp.toCol * (tw + gx);
+      const mToY = by + movingTp.toRow * (th + gy);
+      const mx = mFromX + (mToX - mFromX) * progress;
+      const my = mFromY + (mToY - mFromY) * progress;
+
+      // Merge target tile position (stationary)
+      const tx = bx + ev.to.col * (tw + gx);
+      const ty = by + ev.to.row * (th + gy);
+
+      // Compute overlap rectangle
+      const overlapLeft = Math.max(mx, tx);
+      const overlapTop = Math.max(my, ty);
+      const overlapRight = Math.min(mx + tw, tx + tw);
+      const overlapBottom = Math.min(my + th, ty + th);
+
+      const ow = overlapRight - overlapLeft;
+      const oh = overlapBottom - overlapTop;
+
+      if (ow > 0 && oh > 0) {
+        const resultValue = ev.value;
+        const resultColor = tileHex(resultValue);
+        const resultLabel = tileLabel(resultValue);
+        const resultTextColor = tileTextColor(resultValue);
+
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.fillStyle = resultColor;
+        ctx.fillRect(overlapLeft, overlapTop, ow, oh);
+
+        // Draw result label centered in overlap if there's enough room
+        if (resultLabel && ow > 8 * s && oh > 8 * s) {
+          const fontSize = SIZES.tileFontSize * s * Math.min(1, ow / tw, oh / th);
+          ctx.fillStyle = resultTextColor;
+          ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(resultLabel, overlapLeft + ow / 2, overlapTop + oh / 2);
+        }
+        ctx.restore();
+      }
     }
   }
 

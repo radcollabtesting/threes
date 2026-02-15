@@ -321,9 +321,10 @@ describe('tileLabel', () => {
     expect(tileLabel(encodeTile(GREEN_IDX, 0))).toBe('G');
   });
 
-  test('secondary colors have no label', () => {
-    expect(tileLabel(encodeTile(ORANGE_IDX, 0))).toBeNull();
-    expect(tileLabel(encodeTile(VIOLET_IDX, 0))).toBeNull();
+  test('secondary colors have labels', () => {
+    expect(tileLabel(encodeTile(ORANGE_IDX, 0))).toBe('O');
+    expect(tileLabel(encodeTile(VIOLET_IDX, 0))).toBe('V');
+    expect(tileLabel(encodeTile(INDIGO_IDX, 0))).toBe('I');
   });
 
   test('dotted tiles still show label', () => {
