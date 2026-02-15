@@ -449,11 +449,30 @@ export class Renderer {
         const resultColor = tileHex(resultValue);
         const resultLabel = tileLabel(resultValue);
         const resultTextColor = tileTextColor(resultValue);
+        const overlapBr = Math.min(br, ow / 2, oh / 2);
 
         const ctx = this.ctx;
         ctx.save();
-        ctx.fillStyle = resultColor;
-        ctx.fillRect(overlapLeft, overlapTop, ow, oh);
+
+        // Fill with rounded rect matching card style
+        this.roundRect(overlapLeft, overlapTop, ow, oh, overlapBr, resultColor);
+
+        // Draw 2px black border
+        const borderW = 2 * s;
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = borderW;
+        ctx.beginPath();
+        ctx.moveTo(overlapLeft + overlapBr, overlapTop);
+        ctx.lineTo(overlapLeft + ow - overlapBr, overlapTop);
+        ctx.quadraticCurveTo(overlapLeft + ow, overlapTop, overlapLeft + ow, overlapTop + overlapBr);
+        ctx.lineTo(overlapLeft + ow, overlapTop + oh - overlapBr);
+        ctx.quadraticCurveTo(overlapLeft + ow, overlapTop + oh, overlapLeft + ow - overlapBr, overlapTop + oh);
+        ctx.lineTo(overlapLeft + overlapBr, overlapTop + oh);
+        ctx.quadraticCurveTo(overlapLeft, overlapTop + oh, overlapLeft, overlapTop + oh - overlapBr);
+        ctx.lineTo(overlapLeft, overlapTop + overlapBr);
+        ctx.quadraticCurveTo(overlapLeft, overlapTop, overlapLeft + overlapBr, overlapTop);
+        ctx.closePath();
+        ctx.stroke();
 
         // Draw result label centered in overlap if there's enough room
         if (resultLabel && ow > 8 * s && oh > 8 * s) {
