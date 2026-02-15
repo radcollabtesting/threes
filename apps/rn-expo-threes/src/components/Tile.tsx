@@ -59,9 +59,9 @@ export function Tile({ value, scale = 1 }: TileProps) {
               style={[
                 styles.dot,
                 {
-                  width: 3 * scale,
-                  height: 3 * scale,
-                  borderRadius: 1.5 * scale,
+                  width: 6 * scale,
+                  height: 6 * scale,
+                  borderRadius: 3 * scale,
                   marginLeft: i > 0 ? 2 * scale : 0,
                 },
               ]}

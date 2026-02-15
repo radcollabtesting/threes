@@ -17,6 +17,18 @@ export interface GameOverData {
   currentScoreIndex: number;
 }
 
+interface MergeIndicator {
+  colorIndex: number;
+  blocked: boolean;
+}
+
+interface MergeIndicatorSet {
+  left: MergeIndicator[];
+  right: MergeIndicator[];
+  top: MergeIndicator[];
+  bottom: MergeIndicator[];
+}
+
 export class Renderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -463,7 +475,7 @@ export class Renderer {
     // Draw white dots in top-right corner (backward merge indicator)
     const dots = tileDots(value);
     if (dots > 0) {
-      const dotRadius = 1.5 * s;
+      const dotRadius = 3 * s;
       const dotGap = 2.5 * s;
       const dotStartX = x + w - 8 * s;
       const dotStartY = y + 8 * s;
@@ -481,45 +493,54 @@ export class Renderer {
 
   /**
    * Compute merge direction indicators for a tile based on its row and column
-   * in the grid. Returns arrays of partner color indices grouped by side.
+   * in the grid. Scans outward from the tile in each direction, tracking
+   * whether any non-empty tile blocks the path to a merge partner.
    */
   private getMergeIndicators(
     grid: Grid, row: number, col: number,
-  ): { left: number[]; right: number[]; top: number[]; bottom: number[] } {
+  ): MergeIndicatorSet {
     const value = grid[row][col];
-    const result = { left: [] as number[], right: [] as number[], top: [] as number[], bottom: [] as number[] };
+    const result: MergeIndicatorSet = { left: [], right: [], top: [], bottom: [] };
     if (value === 0) return result;
 
-    const addUnique = (arr: number[], ci: number) => {
-      if (!arr.includes(ci)) arr.push(ci);
+    const addUnique = (arr: MergeIndicator[], ci: number, blocked: boolean) => {
+      if (!arr.some(i => i.colorIndex === ci)) arr.push({ colorIndex: ci, blocked });
     };
 
-    // Scan left in same row
-    for (let c = 0; c < col; c++) {
+    // Scan left (from col-1 toward 0)
+    let blocked = false;
+    for (let c = col - 1; c >= 0; c--) {
       const other = grid[row][c];
-      if (other !== 0 && canMerge(value, other)) {
-        addUnique(result.left, tileColorIndex(other));
+      if (other !== 0) {
+        if (canMerge(value, other)) addUnique(result.left, tileColorIndex(other), blocked);
+        blocked = true;
       }
     }
-    // Scan right in same row
+    // Scan right (from col+1 toward end)
+    blocked = false;
     for (let c = col + 1; c < SIZES.gridSize; c++) {
       const other = grid[row][c];
-      if (other !== 0 && canMerge(value, other)) {
-        addUnique(result.right, tileColorIndex(other));
+      if (other !== 0) {
+        if (canMerge(value, other)) addUnique(result.right, tileColorIndex(other), blocked);
+        blocked = true;
       }
     }
-    // Scan up in same column
-    for (let r = 0; r < row; r++) {
+    // Scan up (from row-1 toward 0)
+    blocked = false;
+    for (let r = row - 1; r >= 0; r--) {
       const other = grid[r][col];
-      if (other !== 0 && canMerge(value, other)) {
-        addUnique(result.top, tileColorIndex(other));
+      if (other !== 0) {
+        if (canMerge(value, other)) addUnique(result.top, tileColorIndex(other), blocked);
+        blocked = true;
       }
     }
-    // Scan down in same column
+    // Scan down (from row+1 toward end)
+    blocked = false;
     for (let r = row + 1; r < SIZES.gridSize; r++) {
       const other = grid[r][col];
-      if (other !== 0 && canMerge(value, other)) {
-        addUnique(result.bottom, tileColorIndex(other));
+      if (other !== 0) {
+        if (canMerge(value, other)) addUnique(result.bottom, tileColorIndex(other), blocked);
+        blocked = true;
       }
     }
 
@@ -529,37 +550,64 @@ export class Renderer {
   /**
    * Draw merge direction indicator lines on tile edges.
    * Each line is 2px thick × 8px long (scaled), colored with the partner's color.
-   * Lines sit on top of the card's black border.
+   * Blocked indicators are drawn with black dashes over the color.
    */
   private drawMergeIndicators(
     x: number, y: number, w: number, h: number, s: number,
-    indicators: { left: number[]; right: number[]; top: number[]; bottom: number[] },
+    indicators: MergeIndicatorSet,
   ): void {
     const ctx = this.ctx;
     const lineW = 2 * s;
     const lineL = 8 * s;
     const gap = 2 * s;
+    // Dash pattern: 2px color, 1px black, repeating
+    const dashOn = 2 * s;
+    const dashOff = 1 * s;
+
+    // Helper: draw a solid or dashed line segment
+    const drawLine = (lx: number, ly: number, lw: number, lh: number, color: string, blocked: boolean) => {
+      ctx.fillStyle = color;
+      ctx.fillRect(lx, ly, lw, lh);
+      if (blocked) {
+        // Overlay black dashes along the long axis
+        ctx.fillStyle = '#000000';
+        const isVertical = lh > lw;
+        if (isVertical) {
+          let pos = ly + dashOn;
+          while (pos < ly + lh) {
+            const segLen = Math.min(dashOff, ly + lh - pos);
+            ctx.fillRect(lx, pos, lw, segLen);
+            pos += segLen + dashOn;
+          }
+        } else {
+          let pos = lx + dashOn;
+          while (pos < lx + lw) {
+            const segLen = Math.min(dashOff, lx + lw - pos);
+            ctx.fillRect(pos, ly, segLen, lh);
+            pos += segLen + dashOn;
+          }
+        }
+      }
+    };
 
     // Left edge: vertical lines stacked vertically, centered
     if (indicators.left.length > 0) {
       const count = indicators.left.length;
       const totalH = count * lineL + (count - 1) * gap;
       let iy = y + (h - totalH) / 2;
-      for (const ci of indicators.left) {
-        ctx.fillStyle = tileHex(encodeTile(ci, 0));
-        ctx.fillRect(x, iy, lineW, lineL);
+      for (const ind of indicators.left) {
+        drawLine(x, iy, lineW, lineL, tileHex(encodeTile(ind.colorIndex, 0)), ind.blocked);
         iy += lineL + gap;
       }
     }
 
-    // Right edge: vertical lines stacked vertically, centered
+    // Right edge
     if (indicators.right.length > 0) {
       const count = indicators.right.length;
       const totalH = count * lineL + (count - 1) * gap;
       let iy = y + (h - totalH) / 2;
-      for (const ci of indicators.right) {
-        ctx.fillStyle = tileHex(encodeTile(ci, 0));
-        ctx.fillRect(x + w - lineW, iy, lineW, lineL);
+      for (const ind of indicators.right) {
+        drawLine(x + w - lineW, iy, lineW, lineL, tileHex(encodeTile(ind.colorIndex, 0)), ind.blocked);
         iy += lineL + gap;
       }
     }
@@ -569,21 +617,19 @@ export class Renderer {
       const count = indicators.top.length;
       const totalW = count * lineL + (count - 1) * gap;
       let ix = x + (w - totalW) / 2;
-      for (const ci of indicators.top) {
-        ctx.fillStyle = tileHex(encodeTile(ci, 0));
-        ctx.fillRect(ix, y, lineL, lineW);
+      for (const ind of indicators.top) {
+        drawLine(ix, y, lineL, lineW, tileHex(encodeTile(ind.colorIndex, 0)), ind.blocked);
         ix += lineL + gap;
       }
     }
 
-    // Bottom edge: horizontal lines stacked horizontally, centered
+    // Bottom edge
     if (indicators.bottom.length > 0) {
       const count = indicators.bottom.length;
       const totalW = count * lineL + (count - 1) * gap;
       let ix = x + (w - totalW) / 2;
-      for (const ci of indicators.bottom) {
-        ctx.fillStyle = tileHex(encodeTile(ci, 0));
-        ctx.fillRect(ix, y + h - lineW, lineL, lineW);
+      for (const ind of indicators.bottom) {
+        drawLine(ix, y + h - lineW, lineL, lineW, tileHex(encodeTile(ind.colorIndex, 0)), ind.blocked);
         ix += lineL + gap;
       }
     }

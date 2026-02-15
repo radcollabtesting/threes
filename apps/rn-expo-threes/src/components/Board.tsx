@@ -11,11 +11,16 @@ import { tileColors } from '@threes/design-tokens';
 import type { Grid, MoveEvent } from '@threes/game-logic';
 import { canMerge, tileColorIndex, tileHex, encodeTile } from '@threes/game-logic';
 
+interface MergeIndicator {
+  colorIndex: number;
+  blocked: boolean;
+}
+
 interface MergeIndicators {
-  left: number[];
-  right: number[];
-  top: number[];
-  bottom: number[];
+  left: MergeIndicator[];
+  right: MergeIndicator[];
+  top: MergeIndicator[];
+  bottom: MergeIndicator[];
 }
 
 function getMergeIndicators(grid: Grid, row: number, col: number): MergeIndicators {
@@ -23,25 +28,45 @@ function getMergeIndicators(grid: Grid, row: number, col: number): MergeIndicato
   const result: MergeIndicators = { left: [], right: [], top: [], bottom: [] };
   if (value === 0) return result;
 
-  const addUnique = (arr: number[], ci: number) => {
-    if (!arr.includes(ci)) arr.push(ci);
+  const addUnique = (arr: MergeIndicator[], ci: number, blocked: boolean) => {
+    if (!arr.some(i => i.colorIndex === ci)) arr.push({ colorIndex: ci, blocked });
   };
 
-  for (let c = 0; c < col; c++) {
+  // Scan left (from col-1 toward 0)
+  let blocked = false;
+  for (let c = col - 1; c >= 0; c--) {
     const other = grid[row][c];
-    if (other !== 0 && canMerge(value, other)) addUnique(result.left, tileColorIndex(other));
+    if (other !== 0) {
+      if (canMerge(value, other)) addUnique(result.left, tileColorIndex(other), blocked);
+      blocked = true;
+    }
   }
+  // Scan right (from col+1 toward end)
+  blocked = false;
   for (let c = col + 1; c < SIZES.gridSize; c++) {
     const other = grid[row][c];
-    if (other !== 0 && canMerge(value, other)) addUnique(result.right, tileColorIndex(other));
+    if (other !== 0) {
+      if (canMerge(value, other)) addUnique(result.right, tileColorIndex(other), blocked);
+      blocked = true;
+    }
   }
-  for (let r = 0; r < row; r++) {
+  // Scan up (from row-1 toward 0)
+  blocked = false;
+  for (let r = row - 1; r >= 0; r--) {
     const other = grid[r][col];
-    if (other !== 0 && canMerge(value, other)) addUnique(result.top, tileColorIndex(other));
+    if (other !== 0) {
+      if (canMerge(value, other)) addUnique(result.top, tileColorIndex(other), blocked);
+      blocked = true;
+    }
   }
+  // Scan down (from row+1 toward end)
+  blocked = false;
   for (let r = row + 1; r < SIZES.gridSize; r++) {
     const other = grid[r][col];
-    if (other !== 0 && canMerge(value, other)) addUnique(result.bottom, tileColorIndex(other));
+    if (other !== 0) {
+      if (canMerge(value, other)) addUnique(result.bottom, tileColorIndex(other), blocked);
+      blocked = true;
+    }
   }
 
   return result;
@@ -209,7 +234,55 @@ function AnimatedTile({
 
   const lineW = 2 * scale;
   const lineL = 8 * scale;
-  const gap = 2 * scale;
+  const lineGap = 2 * scale;
+  const dashOn = 2 * scale;
+  const dashOff = 1 * scale;
+
+  // Renders a solid or dashed indicator line
+  const renderLine = (ind: MergeIndicator, isVertical: boolean) => {
+    const color = tileHex(encodeTile(ind.colorIndex, 0));
+    if (!ind.blocked) {
+      return (
+        <View
+          key={ind.colorIndex}
+          style={isVertical
+            ? { width: lineW, height: lineL, marginVertical: lineGap / 2, backgroundColor: color }
+            : { width: lineL, height: lineW, marginHorizontal: lineGap / 2, backgroundColor: color }
+          }
+        />
+      );
+    }
+    // Dashed: alternating color/black segments (2px on, 1px off)
+    const segments: React.ReactElement[] = [];
+    let pos = 0;
+    let segIdx = 0;
+    while (pos < lineL) {
+      const isOn = segIdx % 2 === 0;
+      const segLen = Math.min(isOn ? dashOn : dashOff, lineL - pos);
+      segments.push(
+        <View
+          key={segIdx}
+          style={isVertical
+            ? { width: lineW, height: segLen, backgroundColor: isOn ? color : '#000000' }
+            : { width: segLen, height: lineW, backgroundColor: isOn ? color : '#000000' }
+          }
+        />,
+      );
+      pos += segLen;
+      segIdx++;
+    }
+    return (
+      <View
+        key={ind.colorIndex}
+        style={isVertical
+          ? { marginVertical: lineGap / 2 }
+          : { flexDirection: 'row', marginHorizontal: lineGap / 2 }
+        }
+      >
+        {segments}
+      </View>
+    );
+  };
 
   return (
     <Animated.View
@@ -244,30 +317,22 @@ function AnimatedTile({
       {/* Merge direction indicators */}
       {indicators.left.length > 0 && (
         <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, justifyContent: 'center' }}>
-          {indicators.left.map((ci) => (
-            <View key={ci} style={{ width: lineW, height: lineL, marginVertical: gap / 2, backgroundColor: tileHex(encodeTile(ci, 0)) }} />
-          ))}
+          {indicators.left.map(ind => renderLine(ind, true))}
         </View>
       )}
       {indicators.right.length > 0 && (
         <View style={{ position: 'absolute', right: 0, top: 0, bottom: 0, justifyContent: 'center' }}>
-          {indicators.right.map((ci) => (
-            <View key={ci} style={{ width: lineW, height: lineL, marginVertical: gap / 2, backgroundColor: tileHex(encodeTile(ci, 0)) }} />
-          ))}
+          {indicators.right.map(ind => renderLine(ind, true))}
         </View>
       )}
       {indicators.top.length > 0 && (
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center' }}>
-          {indicators.top.map((ci) => (
-            <View key={ci} style={{ width: lineL, height: lineW, marginHorizontal: gap / 2, backgroundColor: tileHex(encodeTile(ci, 0)) }} />
-          ))}
+          {indicators.top.map(ind => renderLine(ind, false))}
         </View>
       )}
       {indicators.bottom.length > 0 && (
         <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center' }}>
-          {indicators.bottom.map((ci) => (
-            <View key={ci} style={{ width: lineL, height: lineW, marginHorizontal: gap / 2, backgroundColor: tileHex(encodeTile(ci, 0)) }} />
-          ))}
+          {indicators.bottom.map(ind => renderLine(ind, false))}
         </View>
       )}
     </Animated.View>
