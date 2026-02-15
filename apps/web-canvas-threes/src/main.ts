@@ -4,7 +4,7 @@
  * Reads configuration from URL query params:
  *   ?seed=123       — RNG seed (default: 42)
  *   ?fixture=1      — enable fixture mode (design reference board)
- *   ?strategy=bag   — next-tile strategy: "bag" | "random"
+ *   ?strategy=progressive — next-tile strategy: "bag" | "random" | "progressive"
  *   ?score=1        — enable scoring
  *
  * Keyboard: Arrow keys to move (instant), R to restart.
@@ -42,7 +42,7 @@ const params = new URLSearchParams(window.location.search);
 
 const seed = parseInt(params.get('seed') ?? '42', 10);
 const fixtureMode = params.get('fixture') === '1';
-const nextTileStrategy = (params.get('strategy') ?? 'bag') as 'bag' | 'random';
+const nextTileStrategy = (params.get('strategy') ?? 'progressive') as 'bag' | 'random' | 'progressive';
 const scoringEnabled = params.get('score') !== '0'; // scoring on by default
 
 /* ── Bootstrap ─────────────────────────────────────────── */

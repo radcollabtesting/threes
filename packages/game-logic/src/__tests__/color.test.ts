@@ -92,7 +92,7 @@ describe('tileTier', () => {
   test('secondary colors are tier 2', () => {
     expect(tileTier(encodeTile(ORANGE_IDX, 0))).toBe(2);
     expect(tileTier(encodeTile(VIOLET_IDX, 0))).toBe(2);
-    expect(tileTier(encodeTile(TEAL_IDX, 0))).toBe(2);
+    expect(tileTier(encodeTile(INDIGO_IDX, 0))).toBe(2);
   });
 });
 
@@ -125,22 +125,28 @@ describe('forward merges', () => {
     expect(tileColorIndex(result)).toBe(VIOLET_IDX);
   });
 
-  test('G + Y → Chartreuse', () => {
-    const G = encodeTile(GREEN_IDX, 0);
-    const result = mergeResult(G, YELLOW);
-    expect(tileColorIndex(result)).toBe(CHARTREUSE_IDX);
-  });
-
-  test('G + C → Teal', () => {
-    const G = encodeTile(GREEN_IDX, 0);
-    const result = mergeResult(G, CYAN);
-    expect(tileColorIndex(result)).toBe(TEAL_IDX);
-  });
-
-  test('B + C → Turquoise', () => {
+  test('R + B → Violet', () => {
+    const R = encodeTile(RED_IDX, 0);
     const B = encodeTile(BLUE_IDX, 0);
-    const result = mergeResult(B, CYAN);
-    expect(tileColorIndex(result)).toBe(TURQUOISE_IDX);
+    const result = mergeResult(R, B);
+    expect(tileColorIndex(result)).toBe(VIOLET_IDX);
+    expect(tileDots(result)).toBe(0);
+  });
+
+  test('B + G → Cyan with +1 dot (demotion merge)', () => {
+    const B = encodeTile(BLUE_IDX, 0);
+    const G = encodeTile(GREEN_IDX, 0);
+    const result = mergeResult(B, G);
+    expect(tileColorIndex(result)).toBe(CYAN_IDX);
+    expect(tileDots(result)).toBe(1); // demotion bonus
+  });
+
+  test('B + G with dots → Cyan carries max dots + 1', () => {
+    const B2 = encodeTile(BLUE_IDX, 2);
+    const G1 = encodeTile(GREEN_IDX, 1);
+    const result = mergeResult(B2, G1);
+    expect(tileColorIndex(result)).toBe(CYAN_IDX);
+    expect(tileDots(result)).toBe(3); // max(2,1) + 1 bonus
   });
 
   test('B + M → Indigo', () => {
@@ -200,22 +206,10 @@ describe('backward merges', () => {
 });
 
 describe('unlisted combos are blocked', () => {
-  test('Red + Blue cannot merge (not in table)', () => {
-    const R = encodeTile(RED_IDX, 0);
-    const B = encodeTile(BLUE_IDX, 0);
-    expect(canMerge(R, B)).toBe(false);
-  });
-
   test('Red + Green cannot merge', () => {
     const R = encodeTile(RED_IDX, 0);
     const G = encodeTile(GREEN_IDX, 0);
     expect(canMerge(R, G)).toBe(false);
-  });
-
-  test('Blue + Green cannot merge', () => {
-    const B = encodeTile(BLUE_IDX, 0);
-    const G = encodeTile(GREEN_IDX, 0);
-    expect(canMerge(B, G)).toBe(false);
   });
 
   test('Orange + Violet cannot merge', () => {
@@ -224,17 +218,38 @@ describe('unlisted combos are blocked', () => {
     expect(canMerge(O, V)).toBe(false);
   });
 
-  test('secondary + non-parent primary cannot merge', () => {
-    // Orange parents are Red and Yellow; Blue is not a parent
+  test('Orange + non-parent Blue cannot merge', () => {
     const O = encodeTile(ORANGE_IDX, 0);
     const B = encodeTile(BLUE_IDX, 0);
     expect(canMerge(O, B)).toBe(false);
   });
 
   test('secondary + unrelated base cannot merge', () => {
-    // Orange parents are Red and Yellow; Cyan is not a parent
     const O = encodeTile(ORANGE_IDX, 0);
     expect(canMerge(O, CYAN)).toBe(false);
+  });
+});
+
+describe('new merge rules', () => {
+  test('Red + Blue CAN merge (→ Violet)', () => {
+    const R = encodeTile(RED_IDX, 0);
+    const B = encodeTile(BLUE_IDX, 0);
+    expect(canMerge(R, B)).toBe(true);
+  });
+
+  test('Blue + Green CAN merge (→ Cyan with dot)', () => {
+    const B = encodeTile(BLUE_IDX, 0);
+    const G = encodeTile(GREEN_IDX, 0);
+    expect(canMerge(B, G)).toBe(true);
+  });
+
+  test('Violet can backward merge with Blue (new parent)', () => {
+    const V = encodeTile(VIOLET_IDX, 0);
+    const B = encodeTile(BLUE_IDX, 0);
+    expect(canMerge(V, B)).toBe(true);
+    const result = mergeResult(V, B);
+    expect(tileColorIndex(result)).toBe(BLUE_IDX);
+    expect(tileDots(result)).toBe(1);
   });
 });
 
@@ -390,15 +405,11 @@ describe('getMergePartners', () => {
     expect(getMergePartners(0)).toEqual([]);
   });
 
-  test('base color Cyan has 6 partners', () => {
+  test('base color Cyan has 2 forward partners', () => {
     const partners = getMergePartners(CYAN);
     expect(partners).toContain(MAGENTA_IDX);   // forward C+M → Blue
     expect(partners).toContain(YELLOW_IDX);    // forward Y+C → Green
-    expect(partners).toContain(BLUE_IDX);      // forward B+C → Turquoise
-    expect(partners).toContain(GREEN_IDX);     // forward G+C → Teal
-    expect(partners).toContain(TEAL_IDX);      // backward
-    expect(partners).toContain(TURQUOISE_IDX); // backward
-    expect(partners).toHaveLength(6);
+    expect(partners).toHaveLength(2);
   });
 
   test('secondary Orange has 2 partners (its parents)', () => {
@@ -424,8 +435,8 @@ describe('tile arrays', () => {
     }
   });
 
-  test('SECONDARY_TILES has 6 elements', () => {
-    expect(SECONDARY_TILES).toHaveLength(6);
+  test('SECONDARY_TILES has 3 elements', () => {
+    expect(SECONDARY_TILES).toHaveLength(3);
     for (const t of SECONDARY_TILES) {
       expect(tileTier(t)).toBe(2);
     }

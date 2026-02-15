@@ -50,8 +50,7 @@ export function tileDots(id: CellValue): number {
 const BASE_INDICES = new Set([CYAN_IDX, MAGENTA_IDX, YELLOW_IDX]);
 const PRIMARY_INDICES = new Set([BLUE_IDX, RED_IDX, GREEN_IDX]);
 const SECONDARY_INDICES = new Set([
-  ORANGE_IDX, VIOLET_IDX, CHARTREUSE_IDX,
-  TEAL_IDX, TURQUOISE_IDX, INDIGO_IDX,
+  ORANGE_IDX, VIOLET_IDX, INDIGO_IDX,
 ]);
 
 export function tileTier(id: CellValue): number {
@@ -125,9 +124,8 @@ const FORWARD_MERGES = new Map<number, number>([
   [mergeKey(YELLOW_IDX, CYAN_IDX), GREEN_IDX],
   [mergeKey(RED_IDX, YELLOW_IDX), ORANGE_IDX],
   [mergeKey(RED_IDX, MAGENTA_IDX), VIOLET_IDX],
-  [mergeKey(GREEN_IDX, YELLOW_IDX), CHARTREUSE_IDX],
-  [mergeKey(GREEN_IDX, CYAN_IDX), TEAL_IDX],
-  [mergeKey(BLUE_IDX, CYAN_IDX), TURQUOISE_IDX],
+  [mergeKey(RED_IDX, BLUE_IDX), VIOLET_IDX],
+  [mergeKey(BLUE_IDX, GREEN_IDX), CYAN_IDX],
   [mergeKey(BLUE_IDX, MAGENTA_IDX), INDIGO_IDX],
 ]);
 
@@ -135,10 +133,7 @@ const FORWARD_MERGES = new Map<number, number>([
 
 const SECONDARY_PARENTS = new Map<number, number[]>([
   [ORANGE_IDX, [RED_IDX, YELLOW_IDX]],
-  [VIOLET_IDX, [RED_IDX, MAGENTA_IDX]],
-  [CHARTREUSE_IDX, [GREEN_IDX, YELLOW_IDX]],
-  [TEAL_IDX, [GREEN_IDX, CYAN_IDX]],
-  [TURQUOISE_IDX, [BLUE_IDX, CYAN_IDX]],
+  [VIOLET_IDX, [RED_IDX, MAGENTA_IDX, BLUE_IDX]],
   [INDIGO_IDX, [BLUE_IDX, MAGENTA_IDX]],
 ]);
 
@@ -177,7 +172,11 @@ export function mergeResult(a: CellValue, b: CellValue): CellValue {
   const fwd = FORWARD_MERGES.get(mergeKey(ciA, ciB));
   if (fwd !== undefined) {
     const carryDots = Math.max(tileDots(a), tileDots(b));
-    return encodeTile(fwd, carryDots);
+    // Demotion bonus: +1 dot when result tier < max input tier (e.g. B+G→Cyan)
+    const resultTier = tileTier(encodeTile(fwd, 0));
+    const maxInputTier = Math.max(tileTier(a), tileTier(b));
+    const bonus = resultTier < maxInputTier ? 1 : 0;
+    return encodeTile(fwd, carryDots + bonus);
   }
 
   // Backward merge: secondary + parent → parent with max(secDots, parentDots) + 1
@@ -240,8 +239,5 @@ export const PRIMARY_TILES: CellValue[] = [
 export const SECONDARY_TILES: CellValue[] = [
   encodeTile(ORANGE_IDX, 0),
   encodeTile(VIOLET_IDX, 0),
-  encodeTile(CHARTREUSE_IDX, 0),
-  encodeTile(TEAL_IDX, 0),
-  encodeTile(TURQUOISE_IDX, 0),
   encodeTile(INDIGO_IDX, 0),
 ];

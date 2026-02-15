@@ -1,7 +1,7 @@
 import { applyMove, isValidMove, hasAnyValidMove } from '../move';
 import {
   CYAN, MAGENTA, YELLOW, encodeTile, tileColorIndex,
-  BLUE_IDX, RED_IDX,
+  BLUE_IDX, RED_IDX, GREEN_IDX,
 } from '../color';
 import type { Grid } from '../types';
 
@@ -96,18 +96,18 @@ describe('applyMove — merge during movement', () => {
 
   test('unlisted combo blocks merge — tiles just slide', () => {
     const R = encodeTile(RED_IDX, 0);
-    const B = encodeTile(BLUE_IDX, 0);
-    // R + B is not in the merge table, so they can't merge
+    const G = encodeTile(GREEN_IDX, 0);
+    // R + G is not in the merge table, so they can't merge
     const grid: Grid = [
-      [B, R, 0, 0],
+      [G, R, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
     ];
     const { newGrid, changed } = applyMove(grid, 'left');
-    // B is at leading edge (col 0), R can't merge with B, so nothing moves
+    // G is at leading edge (col 0), R can't merge with G, so nothing moves
     expect(changed).toBe(false);
-    expect(newGrid[0][0]).toBe(B);
+    expect(newGrid[0][0]).toBe(G);
     expect(newGrid[0][1]).toBe(R);
   });
 });
