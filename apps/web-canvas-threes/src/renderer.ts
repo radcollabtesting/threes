@@ -37,6 +37,9 @@ export class Renderer {
   private _boardY = 0;
   private _newGameBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
 
+  /** When true (default), color letter labels are shown on tiles. */
+  colorBlindMode = true;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
@@ -475,7 +478,7 @@ export class Renderer {
         ctx.stroke();
 
         // Draw result label centered in overlap if there's enough room
-        if (resultLabel && ow > 8 * s && oh > 8 * s) {
+        if (this.colorBlindMode && resultLabel && ow > 8 * s && oh > 8 * s) {
           const fontSize = SIZES.tileFontSize * s * Math.min(1, ow / tw, oh / th);
           ctx.fillStyle = resultTextColor;
           ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
@@ -533,8 +536,8 @@ export class Renderer {
     ctx.closePath();
     ctx.stroke();
 
-    // Only draw label for named colors (C, M, Y, R, G, B)
-    if (label) {
+    // Only draw label for named colors when color blind mode is on
+    if (this.colorBlindMode && label) {
       const fontSize = SIZES.tileFontSize * s;
       ctx.fillStyle = text;
       ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;

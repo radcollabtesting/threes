@@ -78,9 +78,11 @@ interface BoardProps {
   scale: number;
   /** Triggers a shake animation when incremented */
   shakeCounter: number;
+  /** When true, letter labels shown on tiles (default true) */
+  colorBlindMode?: boolean;
 }
 
-export function Board({ grid, moveEvents, scale, shakeCounter }: BoardProps) {
+export function Board({ grid, moveEvents, scale, shakeCounter, colorBlindMode = true }: BoardProps) {
   const s = scale;
   const tw = SIZES.tileWidth * s;
   const th = SIZES.tileHeight * s;
@@ -175,6 +177,7 @@ export function Board({ grid, moveEvents, scale, shakeCounter }: BoardProps) {
               scale={s}
               animateSpawn={isSpawn}
               indicators={indicators}
+              colorBlindMode={colorBlindMode}
             />
           );
         }),
@@ -197,12 +200,13 @@ interface AnimatedTileProps {
   scale: number;
   animateSpawn: boolean;
   indicators: MergeIndicators;
+  colorBlindMode: boolean;
 }
 
 function AnimatedTile({
   value, row, col,
   tileWidth, tileHeight, gapX, gapY, borderRadius,
-  scale, animateSpawn, indicators,
+  scale, animateSpawn, indicators, colorBlindMode,
 }: AnimatedTileProps) {
   const { fill, text } = tileColors(value);
   const fontSize = value >= 100

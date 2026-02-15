@@ -13,9 +13,11 @@ import { tileHex, tileTextColor, tileLabel, tileDots } from '@threes/game-logic'
 interface TileProps {
   value: number;
   scale?: number;
+  /** When true, letter labels shown on tiles (default true) */
+  colorBlindMode?: boolean;
 }
 
-export function Tile({ value, scale = 1 }: TileProps) {
+export function Tile({ value, scale = 1, colorBlindMode = true }: TileProps) {
   const fill = tileHex(value);
   const textColor = tileTextColor(value);
   const label = tileLabel(value);
@@ -41,7 +43,7 @@ export function Tile({ value, scale = 1 }: TileProps) {
       accessibilityLabel={label ? `Tile ${label}${dots > 0 ? ` ${dots} dot${dots > 1 ? 's' : ''}` : ''}` : `Color tile`}
       accessibilityRole="text"
     >
-      {label && (
+      {colorBlindMode && label && (
         <Text
           style={[
             styles.text,

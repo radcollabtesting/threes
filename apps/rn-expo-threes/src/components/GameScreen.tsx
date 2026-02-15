@@ -12,6 +12,7 @@ import {
   View,
   Text,
   TouchableOpacity,
+  Switch,
   useWindowDimensions,
   StyleSheet,
 } from 'react-native';
@@ -50,6 +51,9 @@ export function GameScreen() {
   // Shake counter: incremented on invalid moves
   const [shakeCounter, setShakeCounter] = useState(0);
 
+  // Color blind mode: when true, letter labels shown on tiles
+  const [colorBlindMode, setColorBlindMode] = useState(true);
+
   const handleSwipe = useCallback((dir: Direction) => {
     const ok = move(dir);
     if (!ok) {
@@ -61,6 +65,17 @@ export function GameScreen() {
 
   return (
     <View style={styles.root} {...panHandlers}>
+      {/* Color blind mode toggle */}
+      <View style={[styles.cbToggle, { marginTop: 8 }]}>
+        <Switch
+          value={colorBlindMode}
+          onValueChange={setColorBlindMode}
+          trackColor={{ false: '#555', true: '#4CAF50' }}
+          thumbColor="#FFF"
+        />
+        <Text style={styles.cbLabel}>Color Blind</Text>
+      </View>
+
       {/* Score display */}
       <View style={[styles.scoreWrapper, { marginTop: 30 * scale }]}>
         <Text style={[styles.scoreText, { fontSize: 20 * scale }]}>
@@ -75,11 +90,12 @@ export function GameScreen() {
           moveEvents={lastMoveEvents}
           scale={scale}
           shakeCounter={shakeCounter}
+          colorBlindMode={colorBlindMode}
         />
       </View>
 
       {/* Next tile preview */}
-      <NextTilePreview value={state.nextTile} scale={scale} />
+      <NextTilePreview value={state.nextTile} scale={scale} colorBlindMode={colorBlindMode} />
 
       {/* Game over overlay */}
       {state.status === 'ended' && (
@@ -131,5 +147,17 @@ const styles = StyleSheet.create({
   scoreText: {
     color: '#FFF',
     fontWeight: 'bold',
+  },
+  cbToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  cbLabel: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 12,
   },
 });

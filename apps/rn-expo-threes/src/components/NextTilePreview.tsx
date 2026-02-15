@@ -12,9 +12,10 @@ import { Tile } from './Tile';
 interface NextTilePreviewProps {
   value: number;
   scale: number;
+  colorBlindMode?: boolean;
 }
 
-export function NextTilePreview({ value, scale }: NextTilePreviewProps) {
+export function NextTilePreview({ value, scale, colorBlindMode = true }: NextTilePreviewProps) {
   if (value === 0) return null;
 
   const label = tileLabel(value);
@@ -24,7 +25,7 @@ export function NextTilePreview({ value, scale }: NextTilePreviewProps) {
       accessible
       accessibilityLabel={`Next tile: ${label ?? 'color'}`}
     >
-      <Tile value={value} scale={scale} />
+      <Tile value={value} scale={scale} colorBlindMode={colorBlindMode} />
       <Text
         style={[
           styles.label,
