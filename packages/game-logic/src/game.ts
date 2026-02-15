@@ -123,6 +123,7 @@ export class ThreesGame {
     const { newGrid, changed, changedLines, events } = applyMove(
       this._grid,
       direction,
+      this._rng,
     );
 
     // Invalid move: do nothing

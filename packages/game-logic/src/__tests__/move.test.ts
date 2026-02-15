@@ -1,6 +1,6 @@
 import { applyMove, isValidMove, hasAnyValidMove } from '../move';
 import {
-  CYAN, MAGENTA, YELLOW, encodeTile, tileColorIndex,
+  CYAN, MAGENTA, YELLOW, encodeTile, tileColorIndex, tileTier,
   BLUE_IDX, RED_IDX, GREEN_IDX,
 } from '../color';
 import type { Grid } from '../types';
@@ -55,10 +55,10 @@ describe('applyMove — one-step movement', () => {
   });
 });
 
-describe('applyMove — merge during movement', () => {
-  test('C + M merge when moving left (forward merge → Blue)', () => {
+describe('applyMove — merge during movement (same-color)', () => {
+  test('C + C merge when moving left → primary', () => {
     const grid: Grid = [
-      [M, C, 0, 0],
+      [C, C, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
@@ -66,13 +66,14 @@ describe('applyMove — merge during movement', () => {
     const { newGrid, changed } = applyMove(grid, 'left');
     expect(changed).toBe(true);
     const result = newGrid[0][0];
-    expect(tileColorIndex(result)).toBe(BLUE_IDX);
+    expect(tileTier(result)).toBe(1);
+    expect([BLUE_IDX, RED_IDX, GREEN_IDX]).toContain(tileColorIndex(result));
     expect(newGrid[0][1]).toBe(0);
   });
 
-  test('same colors do NOT merge: C + C', () => {
+  test('different colors do NOT merge: C + M', () => {
     const grid: Grid = [
-      [C, C, 0, 0],
+      [M, C, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
@@ -83,21 +84,22 @@ describe('applyMove — merge during movement', () => {
 
   test('merged tile cannot merge again in the same turn', () => {
     const grid: Grid = [
-      [M, C, Y, 0],
+      [C, C, C, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
     ];
     const { newGrid } = applyMove(grid, 'left');
-    expect(tileColorIndex(newGrid[0][0])).toBe(BLUE_IDX);
-    expect(newGrid[0][1]).toBe(Y);
+    // First two Cs merge at col 0, third C slides to col 1 (can't merge with result)
+    expect(tileTier(newGrid[0][0])).toBe(1); // merged → primary
+    expect(newGrid[0][1]).toBe(C); // third C slid but couldn't merge
     expect(newGrid[0][2]).toBe(0);
   });
 
-  test('unlisted combo blocks merge — tiles just slide', () => {
+  test('different colors block merge — tiles just slide', () => {
     const R = encodeTile(RED_IDX, 0);
     const G = encodeTile(GREEN_IDX, 0);
-    // R + G is not in the merge table, so they can't merge
+    // R + G are different colors, can't merge
     const grid: Grid = [
       [G, R, 0, 0],
       [0, 0, 0, 0],
@@ -149,32 +151,34 @@ describe('isValidMove', () => {
 });
 
 describe('hasAnyValidMove', () => {
-  test('false for a fully stuck board (all same color)', () => {
+  test('false for a full board with no same-color neighbors', () => {
+    // Alternating C, M so no two adjacent tiles are the same color
     const grid: Grid = [
-      [C, C, C, C],
-      [C, C, C, C],
-      [C, C, C, C],
-      [C, C, C, C],
+      [C, M, C, M],
+      [M, C, M, C],
+      [C, M, C, M],
+      [M, C, M, C],
     ];
     expect(hasAnyValidMove(grid)).toBe(false);
   });
 
   test('true if any empty cell exists', () => {
     const grid: Grid = [
-      [C, C, C, C],
-      [C, C, C, C],
-      [C, C, C, C],
-      [C, C, C, 0],
+      [C, M, C, M],
+      [M, C, M, C],
+      [C, M, C, M],
+      [M, C, M, 0],
     ];
     expect(hasAnyValidMove(grid)).toBe(true);
   });
 
-  test('true if a merge is possible on a full board', () => {
+  test('true if a same-color merge is possible on a full board', () => {
+    // Two adjacent Cs can merge
     const grid: Grid = [
-      [C, M, C, C],
-      [C, C, C, C],
-      [C, C, C, C],
-      [C, C, C, C],
+      [C, C, M, Y],
+      [M, Y, C, M],
+      [Y, C, M, Y],
+      [C, M, Y, C],
     ];
     expect(hasAnyValidMove(grid)).toBe(true);
   });

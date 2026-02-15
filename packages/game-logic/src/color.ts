@@ -1,5 +1,5 @@
 /**
- * Named color system with merge lookup table.
+ * Named color system with same-color merge rules.
  *
  * 13 named colors across 4 tiers:
  *   Tier 0 (base):      Cyan, Magenta, Yellow
@@ -10,11 +10,14 @@
  * Encoding: id = colorIndex + dots * NUM_COLORS + 1
  *   (0 is reserved for empty cells)
  *
- * Merge rules:
- *   - Forward merges: specific pairs produce named results (carries max dots).
- *   - Any two different secondaries → Gray (0 dots).
+ * Merge rules (same-color matching):
+ *   - Two tiles of the same color and same dots merge.
+ *   - Result is a random color from the next tier (carries dots).
+ *     Tier 0 → random(Blue, Red, Green)
+ *     Tier 1 → random(Orange, Violet, Indigo, Teal)
+ *     Tier 2 → Gray
  *   - Gray + Gray (same dots) → Gray with dots + 1.
- *   - Unlisted combos → blocked (canMerge returns false).
+ *   - Different colors → blocked (canMerge returns false).
  */
 
 import type { CellValue } from './types';
@@ -121,99 +124,63 @@ export function tileLabel(id: CellValue): string | null {
   return LABEL_MAP[tileColorIndex(id)] ?? null;
 }
 
-/* ── Forward merge table ─────────────────────────────── */
+/* ── Tier-up pool: next-tier colors for each tier ────── */
 
-function mergeKey(a: number, b: number): number {
-  const lo = Math.min(a, b);
-  const hi = Math.max(a, b);
-  return lo * NUM_COLORS + hi;
-}
-
-const FORWARD_MERGES = new Map<number, number>([
-  // Tier 0 → Tier 1
-  [mergeKey(CYAN_IDX, MAGENTA_IDX), BLUE_IDX],
-  [mergeKey(MAGENTA_IDX, YELLOW_IDX), RED_IDX],
-  [mergeKey(YELLOW_IDX, CYAN_IDX), GREEN_IDX],
-  // Tier 1 → Tier 2
-  [mergeKey(RED_IDX, YELLOW_IDX), ORANGE_IDX],
-  [mergeKey(RED_IDX, MAGENTA_IDX), VIOLET_IDX],
-  [mergeKey(RED_IDX, BLUE_IDX), VIOLET_IDX],
-  [mergeKey(BLUE_IDX, MAGENTA_IDX), INDIGO_IDX],
-  [mergeKey(BLUE_IDX, GREEN_IDX), TEAL_IDX],
-]);
+const TIER_UP_POOL: Record<number, number[]> = {
+  0: [BLUE_IDX, RED_IDX, GREEN_IDX],
+  1: [ORANGE_IDX, VIOLET_IDX, INDIGO_IDX, TEAL_IDX],
+  2: [GRAY_IDX],
+};
 
 /* ── Merge logic ─────────────────────────────────────── */
 
+/**
+ * Two tiles can merge if they have the same color and same dots.
+ * This gives the simple "match two identical tiles" rule.
+ */
 export function canMerge(a: CellValue, b: CellValue): boolean {
   if (a === 0 || b === 0) return false;
-
-  const ciA = tileColorIndex(a);
-  const ciB = tileColorIndex(b);
-
-  // Gray + Gray: same dots required
-  if (ciA === GRAY_IDX && ciB === GRAY_IDX) {
-    return tileDots(a) === tileDots(b);
-  }
-
-  // Same color can never merge (except Gray handled above)
-  if (ciA === ciB) return false;
-
-  // Forward merges (in table)
-  if (FORWARD_MERGES.has(mergeKey(ciA, ciB))) return true;
-
-  // Two different secondaries → Gray
-  if (SECONDARY_INDICES.has(ciA) && SECONDARY_INDICES.has(ciB)) return true;
-
-  return false;
+  return tileColorIndex(a) === tileColorIndex(b) && tileDots(a) === tileDots(b);
 }
 
-export function mergeResult(a: CellValue, b: CellValue): CellValue {
-  const ciA = tileColorIndex(a);
-  const ciB = tileColorIndex(b);
+/**
+ * Returns the merged tile value.
+ *
+ * @param rng  Optional RNG for picking a random next-tier color.
+ *             If omitted, picks the first color in the pool (for validity checks).
+ */
+export function mergeResult(a: CellValue, b: CellValue, rng?: () => number): CellValue {
+  const ci = tileColorIndex(a);
+  const dots = tileDots(a);
 
   // Gray + Gray (same dots) → Gray with dots + 1
-  if (ciA === GRAY_IDX && ciB === GRAY_IDX) {
-    return encodeTile(GRAY_IDX, tileDots(a) + 1);
+  if (ci === GRAY_IDX) {
+    return encodeTile(GRAY_IDX, dots + 1);
   }
 
-  // Two different secondaries → Gray with 0 dots
-  if (SECONDARY_INDICES.has(ciA) && SECONDARY_INDICES.has(ciB)) {
-    return encodeTile(GRAY_IDX, 0);
+  // Look up the pool of next-tier colors
+  const tier = tileTier(a);
+  const pool = TIER_UP_POOL[tier];
+
+  if (!pool) {
+    // Should not reach here if canMerge was checked first
+    return a;
   }
 
-  // Check forward merge table — dots carry (max of inputs)
-  const fwd = FORWARD_MERGES.get(mergeKey(ciA, ciB));
-  if (fwd !== undefined) {
-    const carryDots = Math.max(tileDots(a), tileDots(b));
-    return encodeTile(fwd, carryDots);
-  }
+  // Pick a random color from the next tier, or first if no RNG
+  const nextColor = rng
+    ? pool[Math.floor(rng() * pool.length)]
+    : pool[0];
 
-  // Should not reach here if canMerge was checked first
-  return a;
+  return encodeTile(nextColor, dots);
 }
 
-/* ── Merge partners (for hint dots) ────────────────── */
+/* ── Merge partners (for hint indicators) ────────────── */
 
-/** Returns color indices that this tile can merge with. */
+/** Returns color indices that this tile can merge with (always its own color). */
 export function getMergePartners(id: CellValue): number[] {
   if (id === 0) return [];
-  const ci = tileColorIndex(id);
-  const partners: number[] = [];
-
-  // Gray merges with Gray (same dots — but partners just lists color indices)
-  if (ci === GRAY_IDX) {
-    return [GRAY_IDX];
-  }
-
-  for (let other = 0; other < NUM_COLORS; other++) {
-    if (other === ci) continue;
-    if (FORWARD_MERGES.has(mergeKey(ci, other))) {
-      partners.push(other);
-    } else if (SECONDARY_INDICES.has(ci) && SECONDARY_INDICES.has(other)) {
-      partners.push(other);
-    }
-  }
-  return partners;
+  return [tileColorIndex(id)];
 }
 
 /* ── Base tile constants ─────────────────────────────── */
