@@ -1,6 +1,7 @@
 import type { Grid, Position } from './types';
+import { CYAN, MAGENTA, YELLOW, tileLabel, tileHex } from './color';
 
-/** Creates a gridSize × gridSize grid filled with 0 (empty) */
+/** Creates a gridSize x gridSize grid filled with 0 (empty) */
 export function createEmptyGrid(gridSize: number): Grid {
   return Array.from({ length: gridSize }, () => Array<number>(gridSize).fill(0));
 }
@@ -28,17 +29,21 @@ export function isGridFull(grid: Grid): boolean {
   return getEmptyCells(grid).length === 0;
 }
 
+const C = CYAN;
+const M = MAGENTA;
+const Y = YELLOW;
+
 /**
- * The fixture board from the design reference (Screen 01 — "Intro").
- *   Row 0: [3, 3, _, 2]
- *   Row 1: [6, _, _, 1]
+ * Fixture board for the color mixing game.
+ *   Row 0: [C, M, _, Y]
+ *   Row 1: [Y, _, _, C]
  *   Row 2: [_, _, _, _]
  *   Row 3: [_, _, _, _]
  */
 export function getFixtureGrid(): Grid {
   return [
-    [3, 3, 0, 2],
-    [6, 0, 0, 1],
+    [C, M, 0, Y],
+    [Y, 0, 0, C],
     [0, 0, 0, 0],
     [0, 0, 0, 0],
   ];
@@ -47,6 +52,15 @@ export function getFixtureGrid(): Grid {
 /** Pretty-prints a grid (useful for debugging / test output) */
 export function gridToString(grid: Grid): string {
   return grid
-    .map(row => row.map(v => String(v).padStart(3)).join(' '))
+    .map(row =>
+      row
+        .map(v => {
+          if (v === 0) return '  .  ';
+          const label = tileLabel(v);
+          if (label) return `  ${label}  `;
+          return tileHex(v).slice(0, 5);
+        })
+        .join(' '),
+    )
     .join('\n');
 }

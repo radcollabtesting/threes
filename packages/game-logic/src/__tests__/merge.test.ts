@@ -1,63 +1,70 @@
 import { canMerge, mergeResult } from '../merge';
+import { CYAN, MAGENTA, YELLOW, mixColors, isSameColor, tileTier } from '../color';
 
-describe('merge rules', () => {
-  test('1 + 2 ⇒ 3', () => {
-    expect(canMerge(1, 2)).toBe(true);
-    expect(mergeResult(1, 2)).toBe(3);
+describe('color merge rules', () => {
+  test('different colors CAN merge: C + M', () => {
+    expect(canMerge(CYAN, MAGENTA)).toBe(true);
   });
 
-  test('2 + 1 ⇒ 3 (order independent)', () => {
-    expect(canMerge(2, 1)).toBe(true);
-    expect(mergeResult(2, 1)).toBe(3);
+  test('different colors CAN merge: C + Y', () => {
+    expect(canMerge(CYAN, YELLOW)).toBe(true);
   });
 
-  test('3 + 3 ⇒ 6', () => {
-    expect(canMerge(3, 3)).toBe(true);
-    expect(mergeResult(3, 3)).toBe(6);
+  test('different colors CAN merge: M + Y', () => {
+    expect(canMerge(MAGENTA, YELLOW)).toBe(true);
   });
 
-  test('6 + 6 ⇒ 12', () => {
-    expect(canMerge(6, 6)).toBe(true);
-    expect(mergeResult(6, 6)).toBe(12);
+  test('same color CANNOT merge: C + C', () => {
+    expect(canMerge(CYAN, CYAN)).toBe(false);
   });
 
-  test('12 + 12 ⇒ 24', () => {
-    expect(canMerge(12, 12)).toBe(true);
-    expect(mergeResult(12, 12)).toBe(24);
+  test('same color CANNOT merge: M + M', () => {
+    expect(canMerge(MAGENTA, MAGENTA)).toBe(false);
   });
 
-  test('48 + 48 ⇒ 96', () => {
-    expect(canMerge(48, 48)).toBe(true);
-    expect(mergeResult(48, 48)).toBe(96);
-  });
-
-  test('1 + 1 does NOT merge', () => {
-    expect(canMerge(1, 1)).toBe(false);
-  });
-
-  test('2 + 2 does NOT merge', () => {
-    expect(canMerge(2, 2)).toBe(false);
-  });
-
-  test('1 + 3 does NOT merge', () => {
-    expect(canMerge(1, 3)).toBe(false);
-  });
-
-  test('2 + 3 does NOT merge', () => {
-    expect(canMerge(2, 3)).toBe(false);
-  });
-
-  test('3 + 6 does NOT merge (unequal ≥ 3)', () => {
-    expect(canMerge(3, 6)).toBe(false);
-  });
-
-  test('6 + 12 does NOT merge', () => {
-    expect(canMerge(6, 12)).toBe(false);
+  test('same color CANNOT merge: Y + Y', () => {
+    expect(canMerge(YELLOW, YELLOW)).toBe(false);
   });
 
   test('empty cells (0) never merge', () => {
     expect(canMerge(0, 0)).toBe(false);
-    expect(canMerge(0, 1)).toBe(false);
-    expect(canMerge(3, 0)).toBe(false);
+    expect(canMerge(0, CYAN)).toBe(false);
+    expect(canMerge(CYAN, 0)).toBe(false);
+  });
+
+  test('merged color can merge with a different color', () => {
+    const blue = mergeResult(CYAN, MAGENTA);
+    // Blue is different from Yellow
+    expect(canMerge(blue, YELLOW)).toBe(true);
+  });
+
+  test('merged color CANNOT merge with itself', () => {
+    const blue = mergeResult(CYAN, MAGENTA);
+    expect(canMerge(blue, blue)).toBe(false);
+  });
+
+  test('base color can merge with a primary result', () => {
+    const red = mergeResult(MAGENTA, YELLOW);
+    expect(canMerge(red, CYAN)).toBe(true);
+  });
+});
+
+describe('mergeResult', () => {
+  test('C + M produces Blue (tier 1)', () => {
+    const result = mergeResult(CYAN, MAGENTA);
+    expect(tileTier(result)).toBe(1);
+    expect(!isSameColor(result, CYAN)).toBe(true);
+    expect(!isSameColor(result, MAGENTA)).toBe(true);
+  });
+
+  test('mergeResult is the same as mixColors', () => {
+    expect(mergeResult(CYAN, YELLOW)).toBe(mixColors(CYAN, YELLOW));
+    expect(mergeResult(MAGENTA, YELLOW)).toBe(mixColors(MAGENTA, YELLOW));
+  });
+
+  test('deeper merges increment tier', () => {
+    const blue = mergeResult(CYAN, MAGENTA); // tier 1
+    const deeper = mergeResult(blue, YELLOW); // tier 2
+    expect(tileTier(deeper)).toBe(2);
   });
 });

@@ -1,34 +1,35 @@
 import { ThreesGame } from '../game';
+import { CYAN, MAGENTA, YELLOW, BASE_TILES, mixColors } from '../color';
 
 describe('ThreesGame', () => {
   describe('initialization', () => {
-    test('default config creates a playing game with 3–5 start tiles', () => {
+    test('default config creates a playing game with 3-5 start tiles', () => {
       const game = new ThreesGame();
       expect(game.status).toBe('playing');
       expect(game.moveCount).toBe(0);
       expect(game.grid.length).toBe(4);
       expect(game.grid[0].length).toBe(4);
 
-      // Count non-zero cells — should be 3–5 (random)
+      // Count non-zero cells — should be 3-5 (random)
       const count = game.grid.flat().filter(v => v > 0).length;
       expect(count).toBeGreaterThanOrEqual(3);
       expect(count).toBeLessThanOrEqual(5);
 
-      // All starting values should be 1, 2, or 3
+      // All starting values should be base colors (C, M, or Y)
       for (const v of game.grid.flat()) {
-        if (v > 0) expect([1, 2, 3]).toContain(v);
+        if (v > 0) expect(BASE_TILES).toContain(v);
       }
     });
 
-    test('fixture mode loads design reference board', () => {
+    test('fixture mode loads color reference board', () => {
       const game = new ThreesGame({ fixtureMode: true });
       expect(game.grid).toEqual([
-        [3, 3, 0, 2],
-        [6, 0, 0, 1],
+        [CYAN, MAGENTA, 0, YELLOW],
+        [YELLOW, 0, 0, CYAN],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
       ]);
-      expect(game.nextTile).toBe(2);
+      expect(game.nextTile).toBe(MAGENTA);
     });
   });
 
@@ -42,64 +43,64 @@ describe('ThreesGame', () => {
 
     test('valid move spawns a tile and draws new nextTile', () => {
       const game = new ThreesGame({ fixtureMode: true });
-      expect(game.nextTile).toBe(2); // fixture starts with next=2
+      expect(game.nextTile).toBe(MAGENTA);
 
       game.move('up');
 
       // After move: nextTile should have been consumed and a new one drawn
       expect(game.nextTile).toBeGreaterThan(0);
+      expect(BASE_TILES).toContain(game.nextTile);
       expect(game.moveCount).toBe(1);
     });
 
-    test('fixture: swipe up merges 1+2=3 at (0,3)', () => {
+    test('fixture: swipe up merges adjacent different colors', () => {
       const game = new ThreesGame({ fixtureMode: true });
+      // Board: [C, M, 0, Y]
+      //        [Y, 0, 0, C]
+      // Swipe up: Y at (1,0) moves up to (0,0) where C is — different colors merge!
+      //           C at (1,3) moves up to (0,3) where Y is — different colors merge!
       game.move('up');
-
-      // (0,3) was 2, (1,3) was 1 → merged into 3 at (0,3)
-      // The rest of row 0 unchanged (6 at (1,0) can't merge with 3 at (0,0))
       const g = game.grid;
-      expect(g[0][0]).toBe(3);
-      expect(g[0][1]).toBe(3);
-      expect(g[0][3]).toBe(3); // merged result
-      expect(g[1][0]).toBe(6); // couldn't merge with 3
-      expect(g[1][3]).toBe(0); // consumed by merge
+      // (0,0) should be C+Y merged = Green
+      expect(g[0][0]).toBe(mixColors(CYAN, YELLOW));
+      // (0,3) should be Y+C merged = Green
+      expect(g[0][3]).toBe(mixColors(YELLOW, CYAN));
+      // (0,1) stays M (nothing below to move)
+      expect(g[0][1]).toBe(MAGENTA);
+      // (1,0) and (1,3) consumed by merge
+      expect(g[1][0]).toBe(0);
     });
   });
 
   describe('invalid move — no side effects', () => {
     test('invalid move returns false, no spawn, no moveCount change', () => {
-      // Create a board where LEFT is invalid:
-      // single tile at top-left corner, nothing can move left
-      const game = new ThreesGame({ fixtureMode: true, seed: 1 });
-
-      // Record state before an invalid move
-      // For fixture board, we need to find an invalid direction.
-      // Let's construct a custom scenario instead:
-      const game2 = new ThreesGame({ seed: 999 });
-      const gridBefore = JSON.stringify(game2.grid);
-      const nextBefore = game2.nextTile;
-      const moveBefore = game2.moveCount;
-
-      // Try all four directions — at least one should be invalid for most boards
-      // Actually with 9 tiles, most directions are likely valid.
-      // Let's just verify the contract: if move() returns false, nothing changed.
       const dirs = ['left', 'right', 'up', 'down'] as const;
       for (const dir of dirs) {
-        const game3 = new ThreesGame({ seed: 999 });
-        const gBefore = JSON.stringify(game3.grid);
-        const nBefore = game3.nextTile;
-        const result = game3.move(dir);
+        const game = new ThreesGame({ seed: 999 });
+        const gBefore = JSON.stringify(game.grid);
+        const nBefore = game.nextTile;
+        const result = game.move(dir);
         if (!result) {
-          expect(JSON.stringify(game3.grid)).toBe(gBefore);
-          expect(game3.nextTile).toBe(nBefore);
-          expect(game3.moveCount).toBe(0);
+          expect(JSON.stringify(game.grid)).toBe(gBefore);
+          expect(game.nextTile).toBe(nBefore);
+          expect(game.moveCount).toBe(0);
         }
       }
     });
   });
 
+  describe('scoring', () => {
+    test('scoring is enabled by default and produces non-zero scores', () => {
+      const game = new ThreesGame();
+      // All starting tiles are base colors (tier 0) worth 3 pts each
+      expect(game.score).toBeGreaterThan(0);
+      const count = game.grid.flat().filter(v => v > 0).length;
+      expect(game.score).toBe(count * 3);
+    });
+  });
+
   describe('deterministic seed reproducibility', () => {
-    test('same seed + moves ⇒ identical game states', () => {
+    test('same seed + moves => identical game states', () => {
       const seed = 12345;
 
       const game1 = new ThreesGame({ seed });
@@ -118,7 +119,7 @@ describe('ThreesGame', () => {
       }
     });
 
-    test('different seeds ⇒ different games', () => {
+    test('different seeds => different games', () => {
       const game1 = new ThreesGame({ seed: 1 });
       const game2 = new ThreesGame({ seed: 99999 });
 

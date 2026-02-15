@@ -1,12 +1,13 @@
 /**
- * A single tile — rounded rectangle with the tile value.
- * Colors and sizing follow the design tokens.
+ * A single tile — rounded rectangle with the tile's color.
+ * Named colors (C, M, Y, R, G, B) display their letter.
+ * Deeper mixes display as solid color with no label.
  */
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SIZES } from '@threes/design-tokens';
-import { tileColors } from '@threes/design-tokens';
+import { tileHex, tileTextColor, tileLabel } from '@threes/game-logic';
 
 interface TileProps {
   value: number;
@@ -14,12 +15,12 @@ interface TileProps {
 }
 
 export function Tile({ value, scale = 1 }: TileProps) {
-  const { fill, text } = tileColors(value);
+  const fill = tileHex(value);
+  const textColor = tileTextColor(value);
+  const label = tileLabel(value);
   const w = SIZES.tileWidth * scale;
   const h = SIZES.tileHeight * scale;
-  const fontSize = value >= 100
-    ? SIZES.tileFontSizeLarge * scale
-    : SIZES.tileFontSize * scale;
+  const fontSize = SIZES.tileFontSize * scale;
 
   return (
     <View
@@ -33,17 +34,19 @@ export function Tile({ value, scale = 1 }: TileProps) {
         },
       ]}
       accessible
-      accessibilityLabel={`Tile ${value}`}
+      accessibilityLabel={label ? `Tile ${label}` : `Color tile`}
       accessibilityRole="text"
     >
-      <Text
-        style={[
-          styles.text,
-          { color: text, fontSize },
-        ]}
-      >
-        {value}
-      </Text>
+      {label && (
+        <Text
+          style={[
+            styles.text,
+            { color: textColor, fontSize },
+          ]}
+        >
+          {label}
+        </Text>
+      )}
     </View>
   );
 }

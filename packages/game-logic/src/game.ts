@@ -16,15 +16,16 @@ import {
 } from './board';
 import { applyMove, hasAnyValidMove } from './move';
 import { selectSpawnPosition } from './spawn';
-import { createNextTileGenerator, type ProgressiveGenerator } from './next-tile';
+import { createNextTileGenerator } from './next-tile';
 import { scoreGrid } from './score';
 import { createRng, pickRandom, randomInt } from '@threes/rng';
+import { BASE_TILES, MAGENTA } from './color';
 
 /**
- * Core game engine for Threes.
+ * Core game engine for the color mixing game.
  *
  * Manages grid state, move validation, tile spawning, next-tile preview,
- * game-over detection, and (optional) scoring.
+ * game-over detection, and scoring.
  *
  * All randomness flows through a seeded PRNG so that the same seed + moves
  * always produce the same game history.
@@ -38,7 +39,7 @@ export class ThreesGame {
   private _score: number;
   private _moveCount: number;
   private _rng: () => number;
-  private _nextTileGen: (() => CellValue) | ProgressiveGenerator;
+  private _nextTileGen: () => CellValue;
   private _lastMoveEvents: MoveEvent[];
 
   constructor(configOverrides?: Partial<GameConfig>) {
@@ -103,12 +104,13 @@ export class ThreesGame {
   /**
    * Attempts a swipe in the given direction.
    *
-   * Turn flow (from spec):
-   *   1. Validate: if move changes nothing → return false (no spawn, no turn).
+   * Turn flow:
+   *   1. Validate: if move changes nothing -> return false (no spawn, no turn).
    *   2. Apply movement + merges.
    *   3. Spawn a new tile (value = current nextTile) on the opposite edge.
    *   4. Draw a new nextTile value for the future.
-   *   5. Check game-over (no valid moves in any direction → ENDED).
+   *   5. Update score.
+   *   6. Check game-over (no valid moves in any direction -> ENDED).
    *
    * @returns true if the move was valid and applied; false otherwise.
    */
@@ -117,7 +119,7 @@ export class ThreesGame {
 
     this._lastMoveEvents = [];
 
-    // 1–2. Apply movement + merges
+    // 1-2. Apply movement + merges
     const { newGrid, changed, changedLines, events } = applyMove(
       this._grid,
       direction,
@@ -129,9 +131,6 @@ export class ThreesGame {
     this._grid = newGrid;
     this._moveCount++;
     this._lastMoveEvents = events;
-
-    // Unlock merged values for progressive generator
-    this._unlockMergedValues(events);
 
     // 3. Spawn a tile with current nextTile value
     const spawnPos = selectSpawnPosition(
@@ -152,9 +151,9 @@ export class ThreesGame {
     }
 
     // 4. Draw a new next tile
-    this._nextTile = this._drawNextTile();
+    this._nextTile = this._nextTileGen();
 
-    // 5. Update score if enabled
+    // 5. Update score
     if (this.config.scoringEnabled) {
       this._score = scoreGrid(this._grid);
     }
@@ -162,6 +161,8 @@ export class ThreesGame {
     // 6. Game-over check
     if (!hasAnyValidMove(this._grid)) {
       this._status = 'ended';
+      // Always compute final score on game over
+      this._score = scoreGrid(this._grid);
     }
 
     return true;
@@ -189,31 +190,13 @@ export class ThreesGame {
 
   /* ── Private ─────────────────────────────────────────── */
 
-  /** Draws the next tile value from whichever generator is active */
-  private _drawNextTile(): CellValue {
-    if (typeof this._nextTileGen === 'function') {
-      return this._nextTileGen();
-    }
-    return this._nextTileGen.next();
-  }
-
-  /** Notifies the progressive generator about newly merged values */
-  private _unlockMergedValues(events: MoveEvent[]): void {
-    if (typeof this._nextTileGen === 'function') return; // bag/random don't care
-    for (const ev of events) {
-      if (ev.type === 'merge') {
-        this._nextTileGen.unlock(ev.value);
-      }
-    }
-  }
-
   private _initializeBoard(): void {
     if (this.config.fixtureMode) {
       this._grid = getFixtureGrid();
-      this._nextTile = 2; // matches design Screen 01
+      this._nextTile = MAGENTA; // default fixture next tile
     } else {
       this._placeRandomStartTiles();
-      this._nextTile = this._drawNextTile();
+      this._nextTile = this._nextTileGen();
     }
 
     if (this.config.scoringEnabled) {
@@ -224,11 +207,9 @@ export class ThreesGame {
   /**
    * Places random starting tiles on the empty board.
    * If startTilesCount is 0, picks a random count between 3 and 5.
-   * Values are always {1, 2, 3} for starting tiles.
+   * Values are always base color tiles (C, M, Y).
    */
   private _placeRandomStartTiles(): void {
-    const START_VALUES: CellValue[] = [1, 2, 3];
-
     const count = this.config.startTilesCount > 0
       ? this.config.startTilesCount
       : randomInt(3, 5, this._rng); // 3, 4, or 5
@@ -243,7 +224,7 @@ export class ThreesGame {
       if (empty.length === 0) break;
 
       const pos = pickRandom(empty, this._rng);
-      const val = START_VALUES[Math.floor(this._rng() * START_VALUES.length)];
+      const val = BASE_TILES[Math.floor(this._rng() * BASE_TILES.length)];
       this._grid[pos.row][pos.col] = val;
     }
   }

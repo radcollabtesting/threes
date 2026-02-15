@@ -1,14 +1,12 @@
 /**
- * Canvas renderer for the Threes game.
+ * Canvas renderer for the color mixing game.
  *
- * Draws the board, tiles, next-tile preview, and game-over overlay.
- * Supports two tile-drawing modes:
- *   1. Static: tiles at grid positions with slide/merge/spawn animations
- *   2. Drag: tiles at interpolated positions following pointer progress
+ * Draws the board, tiles, next-tile preview, score, and game-over overlay.
+ * Tile colors are computed dynamically from the color encoding system.
  */
 
-import { scoreTile, type CellValue, type Grid, type Direction } from '@threes/game-logic';
-import { COLORS, SIZES, BOARD, tileColors, ANIMATION, BUTTON, SCORE_LIST } from '@threes/design-tokens';
+import { scoreTile, tileHex, tileTextColor, tileLabel, type CellValue, type Grid, type Direction } from '@threes/game-logic';
+import { COLORS, SIZES, BOARD, ANIMATION, BUTTON, SCORE_LIST } from '@threes/design-tokens';
 import type { AnimState } from './animation';
 import type { DragState, TilePreview } from './drag';
 import type { ScoreEntry } from './score-history';
@@ -81,6 +79,7 @@ export class Renderer {
     anim: AnimState,
     drag?: DragState | null,
     gameOverData?: GameOverData | null,
+    currentScore?: number,
   ): void {
     const ctx = this.ctx;
     const s = this._scale;
@@ -90,6 +89,16 @@ export class Renderer {
     // ── Background ────────────────────────────────────────
     ctx.fillStyle = COLORS.background;
     ctx.fillRect(0, 0, vw, vh);
+
+    // ── Score display ─────────────────────────────────────
+    if (currentScore !== undefined) {
+      const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.fillStyle = COLORS.scoreText;
+      ctx.font = `bold ${20 * s}px ${font}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`Score: ${currentScore}`, vw / 2, 30 * s);
+    }
 
     // ── Board shake offset ────────────────────────────────
     let shakeX = 0;
@@ -172,7 +181,7 @@ export class Renderer {
       for (let r = 0; r < SIZES.gridSize; r++) {
         for (let c = 0; c < SIZES.gridSize; c++) {
           const val = grid[r][c];
-          if (val < 3) continue;
+          if (val === 0) continue;
           const pts = scoreTile(val);
           const tx = bx + c * (tw + gx) + tw / 2;
           const ty = by + r * (th + gy) + th * 0.25;
@@ -324,11 +333,6 @@ export class Renderer {
 
   /**
    * Drag tile drawing: tiles follow the pointer at interpolated positions.
-   *
-   * Two sub-modes:
-   *   - Valid move: non-moving tiles drawn first (behind), moving tiles
-   *     drawn on top (so merge overlap looks correct).
-   *   - Invalid move: all tiles shift uniformly by a small rubber-band offset.
    */
   private drawDragTiles(
     drag: DragState,
@@ -394,7 +398,9 @@ export class Renderer {
     alpha: number,
   ): void {
     const ctx = this.ctx;
-    const { fill, text } = tileColors(value);
+    const fill = tileHex(value);
+    const text = tileTextColor(value);
+    const label = tileLabel(value);
 
     ctx.save();
     if (alpha < 1) ctx.globalAlpha = alpha;
@@ -409,14 +415,15 @@ export class Renderer {
 
     this.roundRect(x, y, w, h, r, fill);
 
-    const fontSize = value >= 100
-      ? SIZES.tileFontSizeLarge * s
-      : SIZES.tileFontSize * s;
-    ctx.fillStyle = text;
-    ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(String(value), x + w / 2, y + h / 2);
+    // Only draw label for named colors (C, M, Y, R, G, B)
+    if (label) {
+      const fontSize = SIZES.tileFontSize * s;
+      ctx.fillStyle = text;
+      ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, x + w / 2, y + h / 2);
+    }
 
     ctx.restore();
   }
