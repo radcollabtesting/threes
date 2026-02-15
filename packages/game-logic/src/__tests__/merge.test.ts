@@ -2,7 +2,7 @@ import { canMerge, mergeResult } from '../merge';
 import {
   CYAN, MAGENTA, YELLOW,
   encodeTile, tileColorIndex, tileDots,
-  BLUE_IDX, RED_IDX, GREEN_IDX, ORANGE_IDX,
+  BLUE_IDX, RED_IDX, GREEN_IDX, ORANGE_IDX, VIOLET_IDX, INDIGO_IDX, TEAL_IDX, GRAY_IDX,
 } from '../color';
 
 describe('merge rules (via merge.ts delegation)', () => {
@@ -46,11 +46,26 @@ describe('mergeResult (via merge.ts delegation)', () => {
     expect(tileColorIndex(result)).toBe(GREEN_IDX);
   });
 
-  test('backward merge: Orange + Red → Red with dot', () => {
+  test('B + G → Teal', () => {
+    const B = encodeTile(BLUE_IDX, 0);
+    const G = encodeTile(GREEN_IDX, 0);
+    const result = mergeResult(B, G);
+    expect(tileColorIndex(result)).toBe(TEAL_IDX);
+    expect(tileDots(result)).toBe(0);
+  });
+
+  test('two different secondaries → Gray', () => {
     const O = encodeTile(ORANGE_IDX, 0);
-    const R = encodeTile(RED_IDX, 0);
-    const result = mergeResult(O, R);
-    expect(tileColorIndex(result)).toBe(RED_IDX);
+    const V = encodeTile(VIOLET_IDX, 0);
+    const result = mergeResult(O, V);
+    expect(tileColorIndex(result)).toBe(GRAY_IDX);
+    expect(tileDots(result)).toBe(0);
+  });
+
+  test('Gray + Gray (same dots) → Gray with +1 dot', () => {
+    const G0 = encodeTile(GRAY_IDX, 0);
+    const result = mergeResult(G0, G0);
+    expect(tileColorIndex(result)).toBe(GRAY_IDX);
     expect(tileDots(result)).toBe(1);
   });
 });

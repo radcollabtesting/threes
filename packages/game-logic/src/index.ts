@@ -26,7 +26,6 @@ export {
   tileLabel,
   canMerge as colorCanMerge,
   mergeResult as colorMergeResult,
-  isBackwardMerge,
   getMergePartners,
   CYAN,
   MAGENTA,
@@ -46,6 +45,7 @@ export {
   TEAL_IDX,
   TURQUOISE_IDX,
   INDIGO_IDX,
+  GRAY_IDX,
   NUM_COLORS,
 } from './color';
 
