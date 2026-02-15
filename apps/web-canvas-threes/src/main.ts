@@ -102,9 +102,15 @@ function endTutorial(): void {
   resetDrag(drag);
   gameOverData = null;
   tutorialBtn.style.display = '';
+  localStorage.setItem('tutorialComplete', '1');
 }
 
 tutorialBtn.addEventListener('click', startTutorial);
+
+// Auto-start tutorial on first visit
+if (!localStorage.getItem('tutorialComplete')) {
+  startTutorial();
+}
 
 /* ── Input handlers ────────────────────────────────────── */
 
