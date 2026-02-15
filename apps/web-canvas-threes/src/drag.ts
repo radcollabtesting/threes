@@ -102,12 +102,9 @@ export function createDragState(): DragState {
 /**
  * Dry-runs applyMove to determine what each tile would do.
  * Called once when the drag direction locks. Pure, no side effects.
- *
- * @param rng  Optional RNG for merge results. Pass a fresh RNG created from
- *             game.turnMergeSeed so the preview matches the actual move result.
  */
-export function computeDragPreview(grid: Grid, direction: Direction, rng?: () => number): DragPreview {
-  const { changed, events } = applyMove(grid, direction, rng);
+export function computeDragPreview(grid: Grid, direction: Direction): DragPreview {
+  const { changed, events } = applyMove(grid, direction);
 
   // Build lookup: "fromRow,fromCol" → event for tiles that move/merge
   const eventByFrom = new Map<string, MoveEvent>();

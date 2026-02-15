@@ -28,7 +28,6 @@ import {
   GRAY_IDX,
   NUM_COLORS,
 } from '../color';
-import { createRng } from '@threes/rng';
 
 describe('encoding / decoding', () => {
   test('encode then decode round-trips: colorIndex and dots', () => {
@@ -162,51 +161,42 @@ describe('same-color merges: canMerge', () => {
   });
 });
 
-describe('mergeResult: tier 0 → tier 1', () => {
-  test('C + C → random primary (B, R, or G)', () => {
-    const rng = createRng(42);
-    const result = mergeResult(CYAN, CYAN, rng);
-    const ci = tileColorIndex(result);
-    expect([BLUE_IDX, RED_IDX, GREEN_IDX]).toContain(ci);
+describe('mergeResult: tier 0 → tier 1 (deterministic)', () => {
+  test('C + C → Blue', () => {
+    const result = mergeResult(CYAN, CYAN);
+    expect(tileColorIndex(result)).toBe(BLUE_IDX);
     expect(tileDots(result)).toBe(0);
   });
 
-  test('M + M → random primary', () => {
-    const rng = createRng(99);
-    const result = mergeResult(MAGENTA, MAGENTA, rng);
-    const ci = tileColorIndex(result);
-    expect([BLUE_IDX, RED_IDX, GREEN_IDX]).toContain(ci);
+  test('M + M → Red', () => {
+    const result = mergeResult(MAGENTA, MAGENTA);
+    expect(tileColorIndex(result)).toBe(RED_IDX);
   });
 
-  test('Y + Y → random primary', () => {
-    const rng = createRng(7);
-    const result = mergeResult(YELLOW, YELLOW, rng);
-    const ci = tileColorIndex(result);
-    expect([BLUE_IDX, RED_IDX, GREEN_IDX]).toContain(ci);
-  });
-
-  test('without RNG, picks first pool entry (Blue)', () => {
-    const result = mergeResult(CYAN, CYAN);
-    expect(tileColorIndex(result)).toBe(BLUE_IDX);
+  test('Y + Y → Green', () => {
+    const result = mergeResult(YELLOW, YELLOW);
+    expect(tileColorIndex(result)).toBe(GREEN_IDX);
   });
 });
 
-describe('mergeResult: tier 1 → tier 2', () => {
-  test('B + B → random secondary (O, V, I, or T)', () => {
-    const rng = createRng(42);
+describe('mergeResult: tier 1 → tier 2 (deterministic)', () => {
+  test('B + B → Indigo', () => {
     const B = encodeTile(BLUE_IDX, 0);
-    const result = mergeResult(B, B, rng);
-    const ci = tileColorIndex(result);
-    expect([ORANGE_IDX, VIOLET_IDX, INDIGO_IDX, TEAL_IDX]).toContain(ci);
+    const result = mergeResult(B, B);
+    expect(tileColorIndex(result)).toBe(INDIGO_IDX);
     expect(tileDots(result)).toBe(0);
   });
 
-  test('R + R → random secondary', () => {
-    const rng = createRng(99);
+  test('R + R → Orange', () => {
     const R = encodeTile(RED_IDX, 0);
-    const result = mergeResult(R, R, rng);
-    const ci = tileColorIndex(result);
-    expect([ORANGE_IDX, VIOLET_IDX, INDIGO_IDX, TEAL_IDX]).toContain(ci);
+    const result = mergeResult(R, R);
+    expect(tileColorIndex(result)).toBe(ORANGE_IDX);
+  });
+
+  test('G + G → Teal', () => {
+    const G = encodeTile(GREEN_IDX, 0);
+    const result = mergeResult(G, G);
+    expect(tileColorIndex(result)).toBe(TEAL_IDX);
   });
 });
 
@@ -272,31 +262,19 @@ describe('Gray + Gray merges', () => {
   });
 });
 
-describe('randomness over many trials', () => {
-  test('base merges produce all 3 primary colors across many RNG seeds', () => {
-    const seen = new Set<number>();
-    for (let seed = 0; seed < 100; seed++) {
-      const rng = createRng(seed);
-      const result = mergeResult(CYAN, CYAN, rng);
-      seen.add(tileColorIndex(result));
-    }
-    expect(seen).toContain(BLUE_IDX);
-    expect(seen).toContain(RED_IDX);
-    expect(seen).toContain(GREEN_IDX);
+describe('deterministic merge consistency', () => {
+  test('same merge always produces the same result', () => {
+    // Verify determinism: calling mergeResult multiple times gives same answer
+    const r1 = mergeResult(CYAN, CYAN);
+    const r2 = mergeResult(CYAN, CYAN);
+    expect(r1).toBe(r2);
   });
 
-  test('primary merges produce all 4 secondary colors across many RNG seeds', () => {
-    const seen = new Set<number>();
-    const B = encodeTile(BLUE_IDX, 0);
-    for (let seed = 0; seed < 100; seed++) {
-      const rng = createRng(seed);
-      const result = mergeResult(B, B, rng);
-      seen.add(tileColorIndex(result));
-    }
-    expect(seen).toContain(ORANGE_IDX);
-    expect(seen).toContain(VIOLET_IDX);
-    expect(seen).toContain(INDIGO_IDX);
-    expect(seen).toContain(TEAL_IDX);
+  test('dots are preserved through merges', () => {
+    const C1 = encodeTile(CYAN_IDX, 1);
+    const result = mergeResult(C1, C1);
+    expect(tileColorIndex(result)).toBe(BLUE_IDX);
+    expect(tileDots(result)).toBe(1);
   });
 });
 

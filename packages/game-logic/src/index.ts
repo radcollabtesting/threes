@@ -15,7 +15,6 @@ export {
   gridToString,
 } from './board';
 export { DEFAULT_CONFIG, resolveConfig } from './config';
-export { createRng } from '@threes/rng';
 
 export {
   encodeTile,

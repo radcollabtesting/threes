@@ -19,7 +19,7 @@ import { canMerge, mergeResult } from './merge';
  *
  * changedLines contains row indices for horizontal moves, column indices for vertical.
  */
-export function applyMove(grid: Grid, direction: Direction, rng?: () => number): MoveResult {
+export function applyMove(grid: Grid, direction: Direction): MoveResult {
   const size = grid.length;
   const newGrid = cloneGrid(grid);
 
@@ -68,7 +68,7 @@ export function applyMove(grid: Grid, direction: Direction, rng?: () => number):
         });
       } else if (canMerge(value, destValue) && !merged[destRow][destCol]) {
         // ── Merge ──
-        const result = mergeResult(value, destValue, rng);
+        const result = mergeResult(value, destValue);
         newGrid[destRow][destCol] = result;
         newGrid[row][col] = 0;
         merged[destRow][destCol] = true;

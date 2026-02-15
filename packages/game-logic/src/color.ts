@@ -10,12 +10,12 @@
  * Encoding: id = colorIndex + dots * NUM_COLORS + 1
  *   (0 is reserved for empty cells)
  *
- * Merge rules (same-color matching):
+ * Merge rules (deterministic same-color matching):
  *   - Two tiles of the same color and same dots merge.
- *   - Result is a random color from the next tier (carries dots).
- *     Tier 0 → random(Blue, Red, Green)
- *     Tier 1 → random(Orange, Violet, Indigo, Teal)
- *     Tier 2 → Gray
+ *   - Each color has a fixed result (carries dots):
+ *     Cyan → Blue,  Magenta → Red,  Yellow → Green
+ *     Blue → Indigo,  Red → Orange,  Green → Teal
+ *     Indigo / Orange / Teal → Gray
  *   - Gray + Gray (same dots) → Gray with dots + 1.
  *   - Different colors → blocked (canMerge returns false).
  */
@@ -124,12 +124,21 @@ export function tileLabel(id: CellValue): string | null {
   return LABEL_MAP[tileColorIndex(id)] ?? null;
 }
 
-/* ── Tier-up pool: next-tier colors for each tier ────── */
+/* ── Deterministic merge map: color → result color ──── */
 
-const TIER_UP_POOL: Record<number, number[]> = {
-  0: [BLUE_IDX, RED_IDX, GREEN_IDX],
-  1: [ORANGE_IDX, VIOLET_IDX, INDIGO_IDX, TEAL_IDX],
-  2: [GRAY_IDX],
+const MERGE_MAP: Record<number, number> = {
+  [CYAN_IDX]: BLUE_IDX,        // C+C → B
+  [MAGENTA_IDX]: RED_IDX,      // M+M → R
+  [YELLOW_IDX]: GREEN_IDX,     // Y+Y → G
+  [BLUE_IDX]: INDIGO_IDX,      // B+B → I
+  [RED_IDX]: ORANGE_IDX,       // R+R → O
+  [GREEN_IDX]: TEAL_IDX,       // G+G → T
+  [ORANGE_IDX]: GRAY_IDX,      // O+O → Gray
+  [VIOLET_IDX]: GRAY_IDX,      // V+V → Gray
+  [CHARTREUSE_IDX]: GRAY_IDX,  // Ch+Ch → Gray
+  [TEAL_IDX]: GRAY_IDX,        // T+T → Gray
+  [TURQUOISE_IDX]: GRAY_IDX,   // Tu+Tu → Gray
+  [INDIGO_IDX]: GRAY_IDX,      // I+I → Gray
 };
 
 /* ── Merge logic ─────────────────────────────────────── */
@@ -144,12 +153,10 @@ export function canMerge(a: CellValue, b: CellValue): boolean {
 }
 
 /**
- * Returns the merged tile value.
- *
- * @param rng  Optional RNG for picking a random next-tier color.
- *             If omitted, picks the first color in the pool (for validity checks).
+ * Returns the merged tile value. Fully deterministic — each color
+ * has exactly one result color (see MERGE_MAP).
  */
-export function mergeResult(a: CellValue, b: CellValue, rng?: () => number): CellValue {
+export function mergeResult(a: CellValue, b: CellValue): CellValue {
   const ci = tileColorIndex(a);
   const dots = tileDots(a);
 
@@ -158,19 +165,11 @@ export function mergeResult(a: CellValue, b: CellValue, rng?: () => number): Cel
     return encodeTile(GRAY_IDX, dots + 1);
   }
 
-  // Look up the pool of next-tier colors
-  const tier = tileTier(a);
-  const pool = TIER_UP_POOL[tier];
-
-  if (!pool) {
+  const nextColor = MERGE_MAP[ci];
+  if (nextColor === undefined) {
     // Should not reach here if canMerge was checked first
     return a;
   }
-
-  // Pick a random color from the next tier, or first if no RNG
-  const nextColor = rng
-    ? pool[Math.floor(rng() * pool.length)]
-    : pool[0];
 
   return encodeTile(nextColor, dots);
 }

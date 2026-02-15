@@ -11,7 +11,7 @@
  * Touch/mouse: drag to preview, release past 50% to commit.
  */
 
-import { ThreesGame, cloneGrid, scoreGrid, createRng, type Direction } from '@threes/game-logic';
+import { ThreesGame, cloneGrid, scoreGrid, type Direction } from '@threes/game-logic';
 import { Renderer } from './renderer';
 import {
   createAnimState,
@@ -137,7 +137,7 @@ function handleDragMove(x: number, y: number): void {
     if (!dir) return; // not enough displacement yet
 
     drag.direction = dir;
-    drag.preview = computeDragPreview(drag.gridSnapshot!, dir, createRng(game.turnMergeSeed));
+    drag.preview = computeDragPreview(drag.gridSnapshot!, dir);
     drag.phase = 'dragging';
   }
 
