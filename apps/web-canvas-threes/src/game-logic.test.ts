@@ -7,10 +7,10 @@ import { describe, test, expect } from 'vitest';
 import { ThreesGame, canMerge, applyMove, type Grid } from '@threes/game-logic';
 
 describe('shared game-logic (vitest)', () => {
-  test('canMerge rules work', () => {
-    expect(canMerge(1, 2)).toBe(true);   // Cyan + Magenta → Blue
-    expect(canMerge(2, 3)).toBe(true);   // Magenta + Yellow → Red
-    expect(canMerge(1, 1)).toBe(false);  // Cyan + Cyan → blocked
+  test('canMerge rules work (same-color matching)', () => {
+    expect(canMerge(1, 1)).toBe(true);   // Cyan + Cyan → can merge
+    expect(canMerge(2, 2)).toBe(true);   // Magenta + Magenta → can merge
+    expect(canMerge(1, 2)).toBe(false);  // Cyan + Magenta → blocked (different colors)
   });
 
   test('one-step movement', () => {
@@ -26,9 +26,10 @@ describe('shared game-logic (vitest)', () => {
 
   test('fixture mode loads design board', () => {
     const game = new ThreesGame({ fixtureMode: true });
-    // Fixture: [C, M, _, Y] with next = MAGENTA
+    // Fixture: [C, M, _, Y] / [C, _, _, Y] with next = MAGENTA
     // C=1, M=2, Y=3
     expect(game.grid[0]).toEqual([1, 2, 0, 3]);
+    expect(game.grid[1]).toEqual([1, 0, 0, 3]);
     expect(game.nextTile).toBe(2);
   });
 

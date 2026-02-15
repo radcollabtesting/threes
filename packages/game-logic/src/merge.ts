@@ -4,7 +4,7 @@ import { canMerge as colorCanMerge, mergeResult as colorMergeResult } from './co
 /**
  * Determines whether two tile values can merge.
  *
- * Delegates to the color system's merge lookup table.
+ * Delegates to the color system's same-color matching rule.
  */
 export function canMerge(a: CellValue, b: CellValue): boolean {
   return colorCanMerge(a, b);

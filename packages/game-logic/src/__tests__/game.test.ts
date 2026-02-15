@@ -1,8 +1,8 @@
 import { ThreesGame } from '../game';
 import {
   CYAN, MAGENTA, YELLOW, BASE_TILES,
-  mergeResult, tileColorIndex,
-  GREEN_IDX,
+  tileColorIndex, tileTier,
+  BLUE_IDX, RED_IDX, GREEN_IDX,
 } from '../color';
 
 describe('ThreesGame', () => {
@@ -27,7 +27,7 @@ describe('ThreesGame', () => {
       const game = new ThreesGame({ fixtureMode: true });
       expect(game.grid).toEqual([
         [CYAN, MAGENTA, 0, YELLOW],
-        [YELLOW, 0, 0, CYAN],
+        [CYAN, 0, 0, YELLOW],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
       ]);
@@ -49,21 +49,26 @@ describe('ThreesGame', () => {
 
       game.move('up');
 
+      // After merge, primaries exist on board so progressive may return primary
       expect(game.nextTile).toBeGreaterThan(0);
-      expect(BASE_TILES).toContain(game.nextTile);
     });
 
-    test('fixture: swipe up merges adjacent different colors', () => {
+    test('fixture: swipe up merges adjacent same-color tiles', () => {
       const game = new ThreesGame({ fixtureMode: true });
-      // Board: [C, M, 0, Y]
-      //        [Y, 0, 0, C]
-      // Swipe up: Y(1,0) + C(0,0) → Green, C(1,3) + Y(0,3) → Green
+      // Board: [C, M, _, Y]
+      //        [C, _, _, Y]
+      // Swipe up: C(1,0) + C(0,0) → primary, Y(1,3) + Y(0,3) → primary
       game.move('up');
       const g = game.grid;
-      const green = mergeResult(CYAN, YELLOW);
-      expect(g[0][0]).toBe(green);
-      expect(g[0][3]).toBe(green);
-      expect(tileColorIndex(g[0][0])).toBe(GREEN_IDX);
+      // Col 0: two Cyans merged → a primary (tier 1)
+      expect(tileTier(g[0][0])).toBe(1);
+      const ci0 = tileColorIndex(g[0][0]);
+      expect([BLUE_IDX, RED_IDX, GREEN_IDX]).toContain(ci0);
+      // Col 3: two Yellows merged → a primary (tier 1)
+      expect(tileTier(g[0][3])).toBe(1);
+      const ci3 = tileColorIndex(g[0][3]);
+      expect([BLUE_IDX, RED_IDX, GREEN_IDX]).toContain(ci3);
+      // Magenta stays
       expect(g[0][1]).toBe(MAGENTA);
     });
   });
@@ -124,7 +129,7 @@ describe('ThreesGame', () => {
   });
 
   describe('restart', () => {
-    test('restart resets game state with a new board', () => {
+    test('restart resets game state with a fresh random seed', () => {
       const game = new ThreesGame({ seed: 42 });
 
       game.move('up');
