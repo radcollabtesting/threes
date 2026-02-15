@@ -80,8 +80,8 @@ export function tutorialShowBorder(state: TutorialState): boolean {
   return state.stage === 'wall';
 }
 
-export function tutorialShowNextTile(state: TutorialState): boolean {
-  return state.stage === 'normal' || state.stage === 'secondary';
+export function tutorialShowNextTile(_state: TutorialState): boolean {
+  return false; // next tile preview is always hidden during tutorial
 }
 
 export function tutorialShowContinue(state: TutorialState): boolean {
@@ -253,10 +253,8 @@ export function tutorialMove(
 
     case 'normal': {
       doSpawn(state, direction, changedLines);
-      const secondaryMerge = mergeEvents.find((e: MoveEvent) => tileTier(e.value) >= 2);
-      if (secondaryMerge) {
-        state.stage = 'secondary';
-      }
+      // After one move with spawning, advance to the final stage
+      state.stage = 'secondary';
       break;
     }
 

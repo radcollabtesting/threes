@@ -125,8 +125,8 @@ export class Renderer {
       ctx.fillStyle = '#FFFFFF';
       ctx.font = `bold ${16 * s}px ${font}`;
       ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(tutorialInfo.headerText, vw / 2, 30 * s);
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(tutorialInfo.headerText, vw / 2, this._boardY - 12 * s);
     } else if (currentScore !== undefined) {
       const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
       ctx.fillStyle = COLORS.scoreText;
