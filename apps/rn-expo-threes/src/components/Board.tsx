@@ -236,55 +236,21 @@ function AnimatedTile({
     outputRange: [0.5, 1],
   });
 
-  const lineW = 2 * scale;
+  const lineW = 4 * scale;
   const lineL = 8 * scale;
   const lineGap = 2 * scale;
-  const dashOn = 2 * scale;
-  const dashOff = 1 * scale;
 
-  // Renders a solid or dashed indicator line
+  // Renders a solid indicator line, with 50% opacity if blocked
   const renderLine = (ind: MergeIndicator, isVertical: boolean) => {
     const color = tileHex(encodeTile(ind.colorIndex, 0));
-    if (!ind.blocked) {
-      return (
-        <View
-          key={ind.colorIndex}
-          style={isVertical
-            ? { width: lineW, height: lineL, marginVertical: lineGap / 2, backgroundColor: color }
-            : { width: lineL, height: lineW, marginHorizontal: lineGap / 2, backgroundColor: color }
-          }
-        />
-      );
-    }
-    // Dashed: alternating color/black segments (2px on, 1px off)
-    const segments: React.ReactElement[] = [];
-    let pos = 0;
-    let segIdx = 0;
-    while (pos < lineL) {
-      const isOn = segIdx % 2 === 0;
-      const segLen = Math.min(isOn ? dashOn : dashOff, lineL - pos);
-      segments.push(
-        <View
-          key={segIdx}
-          style={isVertical
-            ? { width: lineW, height: segLen, backgroundColor: isOn ? color : '#000000' }
-            : { width: segLen, height: lineW, backgroundColor: isOn ? color : '#000000' }
-          }
-        />,
-      );
-      pos += segLen;
-      segIdx++;
-    }
     return (
       <View
         key={ind.colorIndex}
         style={isVertical
-          ? { marginVertical: lineGap / 2 }
-          : { flexDirection: 'row', marginHorizontal: lineGap / 2 }
+          ? { width: lineW, height: lineL, marginVertical: lineGap / 2, backgroundColor: color, opacity: ind.blocked ? 0.5 : 1 }
+          : { width: lineL, height: lineW, marginHorizontal: lineGap / 2, backgroundColor: color, opacity: ind.blocked ? 0.5 : 1 }
         }
-      >
-        {segments}
-      </View>
+      />
     );
   };
 

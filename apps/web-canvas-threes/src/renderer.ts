@@ -631,37 +631,16 @@ export class Renderer {
     indicators: MergeIndicatorSet,
   ): void {
     const ctx = this.ctx;
-    const lineW = 2 * s;
+    const lineW = 4 * s;
     const lineL = 8 * s;
     const gap = 2 * s;
-    // Dash pattern: 2px color, 1px black, repeating
-    const dashOn = 2 * s;
-    const dashOff = 1 * s;
 
-    // Helper: draw a solid or dashed line segment
+    // Helper: draw a solid line segment, with 50% opacity if blocked
     const drawLine = (lx: number, ly: number, lw: number, lh: number, color: string, blocked: boolean) => {
+      if (blocked) ctx.globalAlpha = 0.5;
       ctx.fillStyle = color;
       ctx.fillRect(lx, ly, lw, lh);
-      if (blocked) {
-        // Overlay black dashes along the long axis
-        ctx.fillStyle = '#000000';
-        const isVertical = lh > lw;
-        if (isVertical) {
-          let pos = ly + dashOn;
-          while (pos < ly + lh) {
-            const segLen = Math.min(dashOff, ly + lh - pos);
-            ctx.fillRect(lx, pos, lw, segLen);
-            pos += segLen + dashOn;
-          }
-        } else {
-          let pos = lx + dashOn;
-          while (pos < lx + lw) {
-            const segLen = Math.min(dashOff, lx + lw - pos);
-            ctx.fillRect(pos, ly, segLen, lh);
-            pos += segLen + dashOn;
-          }
-        }
-      }
+      if (blocked) ctx.globalAlpha = 1.0;
     };
 
     // Left edge: vertical lines stacked vertically, centered
