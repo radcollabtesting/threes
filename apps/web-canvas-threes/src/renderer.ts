@@ -5,7 +5,7 @@
  * Tile colors are computed dynamically from the color encoding system.
  */
 
-import { scoreTile, tileHex, tileTextColor, tileLabel, tileDots, getMergePartners, encodeTile, canMerge, tileColorIndex, mergeResult, type CellValue, type Grid, type Direction } from '@threes/game-logic';
+import { scoreTile, tileHex, tileTextColor, tileLabel, tileDisplayDots, getMergePartners, encodeTile, canMerge, tileColorIndex, mergeResult, type CellValue, type Grid, type Direction } from '@threes/game-logic';
 import { COLORS, SIZES, BOARD, ANIMATION, BUTTON, SCORE_LIST } from '@threes/design-tokens';
 import type { AnimState } from './animation';
 import type { DragState, TilePreview } from './drag';
@@ -37,8 +37,8 @@ export class Renderer {
   private _boardY = 0;
   private _newGameBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
 
-  /** When true (default), color letter labels are shown on tiles. */
-  colorBlindMode = true;
+  /** When true, color letter labels are shown on tiles. */
+  colorBlindMode = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -546,8 +546,8 @@ export class Renderer {
       ctx.fillText(label, x + w / 2, y + h / 2);
     }
 
-    // Draw white dots in top-right corner (backward merge indicator)
-    const dots = tileDots(value);
+    // Draw white dots in top-right corner (scoring tier indicator)
+    const dots = tileDisplayDots(value);
     if (dots > 0) {
       const dotRadius = 3 * s;
       const dotGap = 2.5 * s;

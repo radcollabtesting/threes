@@ -20,6 +20,7 @@ export {
   encodeTile,
   tileColorIndex,
   tileDots,
+  tileDisplayDots,
   tileTier,
   tileHex,
   tileTextColor,

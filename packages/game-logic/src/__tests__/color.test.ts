@@ -2,6 +2,7 @@ import {
   encodeTile,
   tileColorIndex,
   tileDots,
+  tileDisplayDots,
   tileTier,
   tileHex,
   tileTextColor,
@@ -323,8 +324,18 @@ describe('tileHex', () => {
     expect(tileHex(r0)).toBe(tileHex(r3));
   });
 
-  test('Gray has hex color', () => {
-    expect(tileHex(encodeTile(GRAY_IDX, 0))).toBe('#888888');
+  test('Gray hex darkens with each merge', () => {
+    // Fresh gray (0 dots) is lightest
+    expect(tileHex(encodeTile(GRAY_IDX, 0))).toBe('#b0b0b0');
+    // Each merge gets darker
+    expect(tileHex(encodeTile(GRAY_IDX, 1))).toBe('#969696');
+    expect(tileHex(encodeTile(GRAY_IDX, 2))).toBe('#7c7c7c');
+    expect(tileHex(encodeTile(GRAY_IDX, 3))).toBe('#626262');
+    expect(tileHex(encodeTile(GRAY_IDX, 4))).toBe('#484848');
+    expect(tileHex(encodeTile(GRAY_IDX, 5))).toBe('#2e2e2e');
+    // Clamps at near-black
+    expect(tileHex(encodeTile(GRAY_IDX, 6))).toBe('#2e2e2e');
+    expect(tileHex(encodeTile(GRAY_IDX, 10))).toBe('#2e2e2e');
   });
 });
 
@@ -398,6 +409,49 @@ describe('getMergePartners', () => {
     const R0 = encodeTile(RED_IDX, 0);
     const R3 = encodeTile(RED_IDX, 3);
     expect(getMergePartners(R0)).toEqual(getMergePartners(R3));
+  });
+});
+
+describe('tileDisplayDots', () => {
+  test('empty cell has 0 display dots', () => {
+    expect(tileDisplayDots(0)).toBe(0);
+  });
+
+  test('base colors have 0 display dots', () => {
+    expect(tileDisplayDots(CYAN)).toBe(0);
+    expect(tileDisplayDots(MAGENTA)).toBe(0);
+    expect(tileDisplayDots(YELLOW)).toBe(0);
+  });
+
+  test('primary colors have 1 display dot', () => {
+    expect(tileDisplayDots(encodeTile(BLUE_IDX, 0))).toBe(1);
+    expect(tileDisplayDots(encodeTile(RED_IDX, 0))).toBe(1);
+    expect(tileDisplayDots(encodeTile(GREEN_IDX, 0))).toBe(1);
+  });
+
+  test('secondary colors have 2 display dots', () => {
+    expect(tileDisplayDots(encodeTile(ORANGE_IDX, 0))).toBe(2);
+    expect(tileDisplayDots(encodeTile(VIOLET_IDX, 0))).toBe(2);
+    expect(tileDisplayDots(encodeTile(INDIGO_IDX, 0))).toBe(2);
+    expect(tileDisplayDots(encodeTile(TEAL_IDX, 0))).toBe(2);
+  });
+
+  test('fresh Gray has 2 display dots', () => {
+    expect(tileDisplayDots(encodeTile(GRAY_IDX, 0))).toBe(2);
+  });
+
+  test('Gray after 1 merge has 3 display dots', () => {
+    expect(tileDisplayDots(encodeTile(GRAY_IDX, 1))).toBe(3);
+  });
+
+  test('Gray after 2 merges has 4 display dots', () => {
+    expect(tileDisplayDots(encodeTile(GRAY_IDX, 2))).toBe(4);
+  });
+
+  test('Gray display dots = 2 + encoded dots', () => {
+    for (let d = 0; d <= 5; d++) {
+      expect(tileDisplayDots(encodeTile(GRAY_IDX, d))).toBe(2 + d);
+    }
   });
 });
 
