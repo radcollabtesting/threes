@@ -13,6 +13,25 @@
       -webkit-touch-callout: none;
       user-select: none;
     }
+    #tutorial-btn {
+      position: fixed;
+      top: 8px;
+      left: 8px;
+      z-index: 10;
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+      color: #fff;
+      font: bold 16px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
     #cb-toggle {
       position: fixed;
       top: 8px;
@@ -35,6 +54,7 @@
   </style>
 </head>
 <body>
+  <button id="tutorial-btn" aria-label="Tutorial">?</button>
   <div id="cb-toggle">
     <input type="checkbox" id="cb-check" />
     <label for="cb-check">Color Blind</label>

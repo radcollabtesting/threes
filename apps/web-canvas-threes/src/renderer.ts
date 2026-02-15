@@ -17,6 +17,13 @@ export interface GameOverData {
   currentScoreIndex: number;
 }
 
+export interface TutorialRenderInfo {
+  headerText: string;
+  showBorder: boolean;
+  hideNextTile: boolean;
+  showContinue: boolean;
+}
+
 interface MergeIndicator {
   colorIndex: number;
   blocked: boolean;
@@ -36,6 +43,7 @@ export class Renderer {
   private _boardX = 0;
   private _boardY = 0;
   private _newGameBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
+  private _continueBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
 
   /** When true, color letter labels are shown on tiles. */
   colorBlindMode = false;
@@ -54,6 +62,11 @@ export class Renderer {
   /** Returns the "New Game" button bounds in CSS px, or null if not rendered. */
   get newGameButtonBounds(): { x: number; y: number; w: number; h: number } | null {
     return this._newGameBtnBounds;
+  }
+
+  /** Returns the tutorial "Continue" button bounds in CSS px, or null if not rendered. */
+  get continueButtonBounds(): { x: number; y: number; w: number; h: number } | null {
+    return this._continueBtnBounds;
   }
 
   /** Recalculates canvas size and scale factor (call on window resize) */
@@ -95,6 +108,7 @@ export class Renderer {
     drag?: DragState | null,
     gameOverData?: GameOverData | null,
     currentScore?: number,
+    tutorialInfo?: TutorialRenderInfo | null,
   ): void {
     const ctx = this.ctx;
     const s = this._scale;
@@ -105,8 +119,15 @@ export class Renderer {
     ctx.fillStyle = COLORS.background;
     ctx.fillRect(0, 0, vw, vh);
 
-    // ── Score display ─────────────────────────────────────
-    if (currentScore !== undefined) {
+    // ── Tutorial header or score display ──────────────────
+    if (tutorialInfo) {
+      const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `bold ${16 * s}px ${font}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(tutorialInfo.headerText, vw / 2, 30 * s);
+    } else if (currentScore !== undefined) {
       const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
       ctx.fillStyle = COLORS.scoreText;
       ctx.font = `bold ${20 * s}px ${font}`;
@@ -130,6 +151,30 @@ export class Renderer {
     const gy = SIZES.gapY * s;
     const br = SIZES.tileBorderRadius * s;
 
+    // ── Tutorial board border (behind cells) ────────────
+    if (tutorialInfo && tutorialInfo.showBorder) {
+      const borderPad = 6 * s;
+      const borderX = bx - borderPad;
+      const borderY = by - borderPad;
+      const borderW = BOARD.width * s + borderPad * 2;
+      const borderH = BOARD.height * s + borderPad * 2;
+      const borderR = br + 2 * s;
+      ctx.strokeStyle = '#888888';
+      ctx.lineWidth = 3 * s;
+      ctx.beginPath();
+      ctx.moveTo(borderX + borderR, borderY);
+      ctx.lineTo(borderX + borderW - borderR, borderY);
+      ctx.quadraticCurveTo(borderX + borderW, borderY, borderX + borderW, borderY + borderR);
+      ctx.lineTo(borderX + borderW, borderY + borderH - borderR);
+      ctx.quadraticCurveTo(borderX + borderW, borderY + borderH, borderX + borderW - borderR, borderY + borderH);
+      ctx.lineTo(borderX + borderR, borderY + borderH);
+      ctx.quadraticCurveTo(borderX, borderY + borderH, borderX, borderY + borderH - borderR);
+      ctx.lineTo(borderX, borderY + borderR);
+      ctx.quadraticCurveTo(borderX, borderY, borderX + borderR, borderY);
+      ctx.closePath();
+      ctx.stroke();
+    }
+
     // ── Empty cell slots ──────────────────────────────────
     for (let r = 0; r < SIZES.gridSize; r++) {
       for (let c = 0; c < SIZES.gridSize; c++) {
@@ -150,36 +195,59 @@ export class Renderer {
     }
 
     // ── Next tile preview ─────────────────────────────────
-    const nextY = by + BOARD.height * s + SIZES.nextTileGapFromBoard * s;
-    const nextX = bx + (BOARD.width * s - tw) / 2;
+    const hideNextTile = tutorialInfo?.hideNextTile ?? false;
 
-    const nt = anim.nextTile;
-    if (nt.active && nt.progress < 1) {
-      const p = nt.progress;
-      if (p < 0.5) {
-        // Fade out old value
-        const alpha = 1 - p / 0.5;
-        if (nt.oldValue > 0) {
-          this.drawTile(nextX, nextY, tw, th, br, s, nt.oldValue, 1, alpha);
+    if (!hideNextTile) {
+      const nextY = by + BOARD.height * s + SIZES.nextTileGapFromBoard * s;
+      const nextX = bx + (BOARD.width * s - tw) / 2;
+
+      const nt = anim.nextTile;
+      if (nt.active && nt.progress < 1) {
+        const p = nt.progress;
+        if (p < 0.5) {
+          const alpha = 1 - p / 0.5;
+          if (nt.oldValue > 0) {
+            this.drawTile(nextX, nextY, tw, th, br, s, nt.oldValue, 1, alpha);
+          }
+        } else {
+          const alpha = (p - 0.5) / 0.5;
+          if (nt.newValue > 0) {
+            this.drawTile(nextX, nextY, tw, th, br, s, nt.newValue, 1, alpha);
+          }
         }
-      } else {
-        // Fade in new value
-        const alpha = (p - 0.5) / 0.5;
-        if (nt.newValue > 0) {
-          this.drawTile(nextX, nextY, tw, th, br, s, nt.newValue, 1, alpha);
-        }
+      } else if (nextTile > 0) {
+        this.drawTile(nextX, nextY, tw, th, br, s, nextTile, 1, 1);
       }
-    } else if (nextTile > 0) {
-      this.drawTile(nextX, nextY, tw, th, br, s, nextTile, 1, 1);
+
+      // ── "next" label ──────────────────────────────────────
+      const labelY = nextY + th + SIZES.nextLabelGap * s;
+      ctx.fillStyle = COLORS.nextLabelText;
+      ctx.font = `${SIZES.nextLabelFontSize * s}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText('next', nextX + tw / 2, labelY);
     }
 
-    // ── "next" label ──────────────────────────────────────
-    const labelY = nextY + th + SIZES.nextLabelGap * s;
-    ctx.fillStyle = COLORS.nextLabelText;
-    ctx.font = `${SIZES.nextLabelFontSize * s}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText('next', nextX + tw / 2, labelY);
+    // ── Tutorial "Continue" button ──────────────────────
+    this._continueBtnBounds = null;
+
+    if (tutorialInfo && tutorialInfo.showContinue) {
+      const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      const contY = by + BOARD.height * s + SIZES.nextTileGapFromBoard * s;
+      const btnW = BUTTON.width * s;
+      const btnH = BUTTON.height * s;
+      const btnX = vw / 2 - btnW / 2;
+      const btnR = BUTTON.borderRadius * s;
+
+      this.roundRect(btnX, contY, btnW, btnH, btnR, BUTTON.fill);
+      ctx.fillStyle = BUTTON.text;
+      ctx.font = `bold ${BUTTON.fontSize * s}px ${font}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Continue', btnX + btnW / 2, contY + btnH / 2);
+
+      this._continueBtnBounds = { x: btnX, y: contY, w: btnW, h: btnH };
+    }
 
     // ── Game-over overlay ─────────────────────────────────
     this._newGameBtnBounds = null;
