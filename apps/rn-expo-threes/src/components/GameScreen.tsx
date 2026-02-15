@@ -61,8 +61,15 @@ export function GameScreen() {
 
   return (
     <View style={styles.root} {...panHandlers}>
+      {/* Score display */}
+      <View style={[styles.scoreWrapper, { marginTop: 30 * scale }]}>
+        <Text style={[styles.scoreText, { fontSize: 20 * scale }]}>
+          Score: {state.score}
+        </Text>
+      </View>
+
       {/* Board area */}
-      <View style={[styles.boardWrapper, { marginTop: SIZES.boardTopOffset * scale }]}>
+      <View style={[styles.boardWrapper, { marginTop: (SIZES.boardTopOffset - 60) * scale }]}>
         <Board
           grid={state.grid}
           moveEvents={lastMoveEvents}
@@ -117,5 +124,12 @@ const styles = StyleSheet.create({
   },
   restartText: {
     color: '#FFF',
+  },
+  scoreWrapper: {
+    alignItems: 'center',
+  },
+  scoreText: {
+    color: '#FFF',
+    fontWeight: 'bold',
   },
 });

@@ -1,5 +1,5 @@
 /**
- * @threes/design-tokens — Visual constants derived from the Figma design reference.
+ * @threes/design-tokens — Visual constants for the color mixing game.
  *
  * All size values are in "baseline dp" and should be scaled responsively
  * by the rendering layer (Canvas scale factor or RN responsive sizing).
@@ -12,28 +12,11 @@ export const COLORS = {
   background: '#000000',
   /** Empty cell placeholder */
   emptyCellSlot: '#292929',
-  /** Tile value 1: blue */
-  tile1Fill: '#5491FE',
-  tile1Text: '#FFFFFF',
-  /** Tile value 2: red/salmon */
-  tile2Fill: '#FE5554',
-  tile2Text: '#FFFFFF',
-  /** Tiles >= 3: light gray with black text */
-  tileHighFill: '#BDBDBD',
-  tileHighText: '#000000',
   /** "next" label below the preview tile */
   nextLabelText: '#FFFFFF',
+  /** Score display text */
+  scoreText: '#FFFFFF',
 } as const;
-
-/**
- * Returns fill and text colors for a given tile value.
- * Matches the design reference: blue(1), red(2), gray(>=3).
- */
-export function tileColors(value: number): { fill: string; text: string } {
-  if (value === 1) return { fill: COLORS.tile1Fill, text: COLORS.tile1Text };
-  if (value === 2) return { fill: COLORS.tile2Fill, text: COLORS.tile2Text };
-  return { fill: COLORS.tileHighFill, text: COLORS.tileHighText };
-}
 
 /* ── Size tokens (baseline dp) ─────────────────────────── */
 
@@ -52,7 +35,7 @@ export const SIZES = {
   nextLabelGap: 15,
   nextLabelFontSize: 16,
   tileFontSize: 24,
-  /** Smaller font for 3+ digit tile numbers (100, 192, ...) */
+  /** Smaller font for longer labels */
   tileFontSizeLarge: 20,
 } as const;
 

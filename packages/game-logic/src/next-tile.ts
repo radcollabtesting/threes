@@ -1,52 +1,48 @@
-import type { CellValue, NextTileStrategy } from './types';
+import type { CellValue, Grid, NextTileStrategy } from './types';
 import { shuffleArray } from '@threes/rng';
-
-/**
- * Interface for the progressive generator, which supports unlocking
- * new tile values as the player merges higher tiles.
- */
-export interface ProgressiveGenerator {
-  next: () => CellValue;
-  /** Call when a merge produces a new value — adds it to the pool */
-  unlock: (value: CellValue) => void;
-}
+import {
+  CYAN, MAGENTA, YELLOW,
+  BASE_TILES,
+  tileTier, tileColorIndex, encodeTile,
+} from './color';
 
 /**
  * Creates a next-tile generator based on the selected strategy.
  *
- * - 'bag' and 'random' return a simple function (backward compat).
- * - 'progressive' returns a ProgressiveGenerator with next() + unlock().
+ * All generators accept a Grid parameter; bag and random ignore it,
+ * while progressive uses it to decide which tiers are unlocked.
  */
 export function createNextTileGenerator(
   strategy: NextTileStrategy,
   rng: () => number,
-): (() => CellValue) | ProgressiveGenerator {
+): (grid: Grid) => CellValue {
   switch (strategy) {
     case 'bag':
       return createBagGenerator(rng);
-    case 'random':
-      return createRandomGenerator(rng);
     case 'progressive':
       return createProgressiveGenerator(rng);
+    case 'random':
+    default:
+      return createRandomGenerator(rng);
   }
 }
 
 /**
  * BAG generator:
- *   Bag = [1,1,1,1, 2,2,2,2, 3,3,3,3]  (12 tiles)
+ *   Bag = [C,C,C,C, M,M,M,M, Y,Y,Y,Y]  (12 tiles)
  *   Shuffle with seeded RNG on creation and on each refill.
  *   Pop one value per call.
  */
-function createBagGenerator(rng: () => number): () => CellValue {
+function createBagGenerator(rng: () => number): (grid: Grid) => CellValue {
   const BAG_TEMPLATE: CellValue[] = [
-    1, 1, 1, 1,
-    2, 2, 2, 2,
-    3, 3, 3, 3,
+    CYAN, CYAN, CYAN, CYAN,
+    MAGENTA, MAGENTA, MAGENTA, MAGENTA,
+    YELLOW, YELLOW, YELLOW, YELLOW,
   ];
 
   let bag: CellValue[] = [];
 
-  return function nextFromBag(): CellValue {
+  return function nextFromBag(_grid: Grid): CellValue {
     if (bag.length === 0) {
       bag = shuffleArray(BAG_TEMPLATE, rng);
     }
@@ -56,62 +52,56 @@ function createBagGenerator(rng: () => number): () => CellValue {
 
 /**
  * RANDOM generator:
- *   Uniform random choice among {1, 2, 3}.
+ *   Uniform random choice among {C, M, Y}.
  */
-function createRandomGenerator(rng: () => number): () => CellValue {
-  const VALUES: CellValue[] = [1, 2, 3];
-  return function nextRandom(): CellValue {
+function createRandomGenerator(rng: () => number): (grid: Grid) => CellValue {
+  const VALUES: CellValue[] = [CYAN, MAGENTA, YELLOW];
+  return function nextRandom(_grid: Grid): CellValue {
     return VALUES[Math.floor(rng() * VALUES.length)];
   };
 }
 
 /**
  * PROGRESSIVE generator:
- *   Starts with {1, 2} in the pool. As the player merges to create
- *   new tile values, those values are unlocked and can appear as
- *   next tiles.
- *
- *   Weights:
- *     1, 2, 3  → weight 1.0  (base tiles, equal chance)
- *     6        → weight 0.5
- *     12       → weight 0.25
- *     24       → weight 0.125
- *     …each tier halves
- *
- *   Selection: weighted random pick from the unlocked pool.
+ *   Scans the board for specific colors present and only spawns those.
+ *   - Always ≥50% chance of base (C, M, Y).
+ *   - If any primary colors exist on board: remaining chance picks from
+ *     only the specific primaries the player has created.
+ *   - Same for secondaries.
+ *   Weights: 50% base, 25% primary (if any), 25% secondary (if any).
+ *   If only primaries seen: 50% base, 50% primary.
+ *   Always consumes exactly 2 rng calls for determinism.
  */
-function createProgressiveGenerator(rng: () => number): ProgressiveGenerator {
-  const pool = new Set<CellValue>([1, 2]);
+function createProgressiveGenerator(rng: () => number): (grid: Grid) => CellValue {
+  return function nextProgressive(grid: Grid): CellValue {
+    const seenPrimaries: CellValue[] = [];
+    const seenSecondaries: CellValue[] = [];
+    const seen = new Set<number>();
 
-  function weight(v: CellValue): number {
-    if (v <= 3) return 1;
-    // Each doubling above 3 halves the weight: 6→0.5, 12→0.25, …
-    // v = 3 * 2^k  →  k = log2(v/3)  →  weight = 1 / 2^(k+1)
-    const k = Math.log2(v / 3);
-    return 1 / Math.pow(2, k + 1);
-  }
-
-  function next(): CellValue {
-    const entries: { value: CellValue; w: number }[] = [];
-    let total = 0;
-    for (const v of pool) {
-      const w = weight(v);
-      entries.push({ value: v, w });
-      total += w;
+    for (const row of grid) {
+      for (const cell of row) {
+        if (cell === 0) continue;
+        const ci = tileColorIndex(cell);
+        if (seen.has(ci)) continue;
+        seen.add(ci);
+        const tier = tileTier(cell);
+        if (tier === 1) seenPrimaries.push(encodeTile(ci, 0));
+        if (tier === 2) seenSecondaries.push(encodeTile(ci, 0));
+      }
     }
 
-    let r = rng() * total;
-    for (const e of entries) {
-      r -= e.w;
-      if (r < 0) return e.value;
+    // Always consume two random numbers for determinism
+    const tierRoll = rng();
+    const tileRoll = rng();
+
+    if (seenPrimaries.length === 0 || tierRoll < 0.5) {
+      return BASE_TILES[Math.floor(tileRoll * BASE_TILES.length)];
     }
-    // Fallback (shouldn't happen due to floating point, but safe)
-    return entries[entries.length - 1].value;
-  }
 
-  function unlock(value: CellValue): void {
-    pool.add(value);
-  }
+    if (seenSecondaries.length === 0 || tierRoll < 0.75) {
+      return seenPrimaries[Math.floor(tileRoll * seenPrimaries.length)];
+    }
 
-  return { next, unlock };
+    return seenSecondaries[Math.floor(tileRoll * seenSecondaries.length)];
+  };
 }

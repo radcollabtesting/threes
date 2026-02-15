@@ -4,8 +4,8 @@ export { ThreesGame } from './game';
 export { applyMove, isValidMove, hasAnyValidMove, directionDelta } from './move';
 export { canMerge, mergeResult } from './merge';
 export { selectSpawnPosition, getSpawnEdgeCells } from './spawn';
-export { createNextTileGenerator, type ProgressiveGenerator } from './next-tile';
-export { scoreTile, scoreGrid, sumGrid } from './score';
+export { createNextTileGenerator } from './next-tile';
+export { scoreTile, scoreGrid } from './score';
 export {
   createEmptyGrid,
   cloneGrid,
@@ -15,6 +15,39 @@ export {
   gridToString,
 } from './board';
 export { DEFAULT_CONFIG, resolveConfig } from './config';
+
+export {
+  encodeTile,
+  tileColorIndex,
+  tileDots,
+  tileTier,
+  tileHex,
+  tileTextColor,
+  tileLabel,
+  canMerge as colorCanMerge,
+  mergeResult as colorMergeResult,
+  isBackwardMerge,
+  getMergePartners,
+  CYAN,
+  MAGENTA,
+  YELLOW,
+  BASE_TILES,
+  PRIMARY_TILES,
+  SECONDARY_TILES,
+  CYAN_IDX,
+  MAGENTA_IDX,
+  YELLOW_IDX,
+  BLUE_IDX,
+  RED_IDX,
+  GREEN_IDX,
+  ORANGE_IDX,
+  VIOLET_IDX,
+  CHARTREUSE_IDX,
+  TEAL_IDX,
+  TURQUOISE_IDX,
+  INDIGO_IDX,
+  NUM_COLORS,
+} from './color';
 
 export type {
   Direction,

@@ -4,14 +4,14 @@
  * Reads configuration from URL query params:
  *   ?seed=123       — RNG seed (default: 42)
  *   ?fixture=1      — enable fixture mode (design reference board)
- *   ?strategy=bag   — next-tile strategy: "bag" | "random"
+ *   ?strategy=progressive — next-tile strategy: "bag" | "random" | "progressive"
  *   ?score=1        — enable scoring
  *
  * Keyboard: Arrow keys to move (instant), R to restart.
  * Touch/mouse: drag to preview, release past 50% to commit.
  */
 
-import { ThreesGame, cloneGrid, sumGrid, type Direction } from '@threes/game-logic';
+import { ThreesGame, cloneGrid, scoreGrid, type Direction } from '@threes/game-logic';
 import { Renderer } from './renderer';
 import {
   createAnimState,
@@ -40,10 +40,10 @@ import type { GameOverData } from './renderer';
 
 const params = new URLSearchParams(window.location.search);
 
-const seed = parseInt(params.get('seed') ?? '42', 10);
+const seed = parseInt(params.get('seed') ?? String(Math.floor(Math.random() * 2147483647)), 10);
 const fixtureMode = params.get('fixture') === '1';
 const nextTileStrategy = (params.get('strategy') ?? 'progressive') as 'bag' | 'random' | 'progressive';
-const scoringEnabled = params.get('score') === '1';
+const scoringEnabled = params.get('score') !== '0'; // scoring on by default
 
 /* ── Bootstrap ─────────────────────────────────────────── */
 
@@ -56,7 +56,7 @@ let game = new ThreesGame({ seed, fixtureMode, nextTileStrategy, scoringEnabled 
 let gameOverData: GameOverData | null = null;
 
 function onGameOver(): void {
-  const finalScore = sumGrid(game.grid);
+  const finalScore = scoreGrid(game.grid);
   const { scores, newIndex } = saveScore(finalScore);
   // Sort scores descending; track the current game's entry by reference
   const currentEntry = scores[newIndex];
@@ -69,8 +69,9 @@ function onGameOver(): void {
 
 function playMergeSounds(): void {
   for (const ev of game.lastMoveEvents) {
-    if (ev.type === 'merge' && (ev.value === 3 || ev.value === 6)) {
-      playMergeSound(ev.value);
+    if (ev.type === 'merge') {
+      // Play merge sound (use 3 sound for all merges)
+      playMergeSound(3);
     }
   }
 }
@@ -247,6 +248,7 @@ function loop(now: number): void {
     anim,
     drag.phase === 'dragging' || drag.phase === 'snapping' ? drag : null,
     gameOverData,
+    game.score,
   );
 
   requestAnimationFrame(loop);
