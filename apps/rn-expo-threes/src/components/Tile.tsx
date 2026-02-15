@@ -2,13 +2,13 @@
  * A single tile — rounded rectangle with the tile's color.
  * Named colors (C, M, Y, R, G, B) display their letter.
  * Secondary/Brown/Black display as solid color with no label.
- * White dots in top-right corner indicate backward merge bonus.
+ * White dots in top-right corner indicate scoring tier.
  */
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SIZES } from '@threes/design-tokens';
-import { tileHex, tileTextColor, tileLabel, tileDots } from '@threes/game-logic';
+import { tileHex, tileTextColor, tileLabel, tileDisplayDots } from '@threes/game-logic';
 
 interface TileProps {
   value: number;
@@ -21,7 +21,7 @@ export function Tile({ value, scale = 1, colorBlindMode = true }: TileProps) {
   const fill = tileHex(value);
   const textColor = tileTextColor(value);
   const label = tileLabel(value);
-  const dots = tileDots(value);
+  const dots = tileDisplayDots(value);
   const w = SIZES.tileWidth * scale;
   const h = SIZES.tileHeight * scale;
   const fontSize = SIZES.tileFontSize * scale;
