@@ -5,7 +5,7 @@
  * Tile colors are computed dynamically from the color encoding system.
  */
 
-import { scoreTile, tileHex, tileTextColor, tileLabel, type CellValue, type Grid, type Direction } from '@threes/game-logic';
+import { scoreTile, tileHex, tileTextColor, tileLabel, tileDots, type CellValue, type Grid, type Direction } from '@threes/game-logic';
 import { COLORS, SIZES, BOARD, ANIMATION, BUTTON, SCORE_LIST } from '@threes/design-tokens';
 import type { AnimState } from './animation';
 import type { DragState, TilePreview } from './drag';
@@ -423,6 +423,22 @@ export class Renderer {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(label, x + w / 2, y + h / 2);
+    }
+
+    // Draw white dots in top-right corner (backward merge indicator)
+    const dots = tileDots(value);
+    if (dots > 0) {
+      const dotRadius = 3 * s;
+      const dotGap = 2.5 * s;
+      const dotStartX = x + w - 8 * s;
+      const dotStartY = y + 8 * s;
+      ctx.fillStyle = '#FFFFFF';
+      for (let d = 0; d < dots && d < 5; d++) {
+        const dx = dotStartX - d * (dotRadius * 2 + dotGap);
+        ctx.beginPath();
+        ctx.arc(dx, dotStartY, dotRadius, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
     ctx.restore();

@@ -1,13 +1,14 @@
 /**
  * A single tile — rounded rectangle with the tile's color.
  * Named colors (C, M, Y, R, G, B) display their letter.
- * Deeper mixes display as solid color with no label.
+ * Secondary/Brown/Black display as solid color with no label.
+ * White dots in top-right corner indicate backward merge bonus.
  */
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SIZES } from '@threes/design-tokens';
-import { tileHex, tileTextColor, tileLabel } from '@threes/game-logic';
+import { tileHex, tileTextColor, tileLabel, tileDots } from '@threes/game-logic';
 
 interface TileProps {
   value: number;
@@ -18,6 +19,7 @@ export function Tile({ value, scale = 1 }: TileProps) {
   const fill = tileHex(value);
   const textColor = tileTextColor(value);
   const label = tileLabel(value);
+  const dots = tileDots(value);
   const w = SIZES.tileWidth * scale;
   const h = SIZES.tileHeight * scale;
   const fontSize = SIZES.tileFontSize * scale;
@@ -34,7 +36,7 @@ export function Tile({ value, scale = 1 }: TileProps) {
         },
       ]}
       accessible
-      accessibilityLabel={label ? `Tile ${label}` : `Color tile`}
+      accessibilityLabel={label ? `Tile ${label}${dots > 0 ? ` ${dots} dot${dots > 1 ? 's' : ''}` : ''}` : `Color tile`}
       accessibilityRole="text"
     >
       {label && (
@@ -47,6 +49,24 @@ export function Tile({ value, scale = 1 }: TileProps) {
           {label}
         </Text>
       )}
+      {dots > 0 && (
+        <View style={styles.dotsContainer}>
+          {Array.from({ length: Math.min(dots, 5) }).map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.dot,
+                {
+                  width: 6 * scale,
+                  height: 6 * scale,
+                  borderRadius: 3 * scale,
+                  marginLeft: i > 0 ? 2 * scale : 0,
+                },
+              ]}
+            />
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -58,5 +78,14 @@ const styles = StyleSheet.create({
   },
   text: {
     fontWeight: 'bold',
+  },
+  dotsContainer: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    flexDirection: 'row',
+  },
+  dot: {
+    backgroundColor: '#FFFFFF',
   },
 });

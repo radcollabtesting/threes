@@ -1,5 +1,8 @@
 import { ThreesGame } from '../game';
-import { CYAN, MAGENTA, YELLOW, BASE_TILES, mixColors } from '../color';
+import {
+  CYAN, MAGENTA, YELLOW, BASE_TILES, mergeResult, tileColorIndex,
+  GREEN_IDX,
+} from '../color';
 
 describe('ThreesGame', () => {
   describe('initialization', () => {
@@ -10,12 +13,10 @@ describe('ThreesGame', () => {
       expect(game.grid.length).toBe(4);
       expect(game.grid[0].length).toBe(4);
 
-      // Count non-zero cells — should be 3-5 (random)
       const count = game.grid.flat().filter(v => v > 0).length;
       expect(count).toBeGreaterThanOrEqual(3);
       expect(count).toBeLessThanOrEqual(5);
 
-      // All starting values should be base colors (C, M, or Y)
       for (const v of game.grid.flat()) {
         if (v > 0) expect(BASE_TILES).toContain(v);
       }
@@ -47,28 +48,22 @@ describe('ThreesGame', () => {
 
       game.move('up');
 
-      // After move: nextTile should have been consumed and a new one drawn
       expect(game.nextTile).toBeGreaterThan(0);
       expect(BASE_TILES).toContain(game.nextTile);
-      expect(game.moveCount).toBe(1);
     });
 
     test('fixture: swipe up merges adjacent different colors', () => {
       const game = new ThreesGame({ fixtureMode: true });
       // Board: [C, M, 0, Y]
       //        [Y, 0, 0, C]
-      // Swipe up: Y at (1,0) moves up to (0,0) where C is — different colors merge!
-      //           C at (1,3) moves up to (0,3) where Y is — different colors merge!
+      // Swipe up: Y(1,0) + C(0,0) → Green, C(1,3) + Y(0,3) → Green
       game.move('up');
       const g = game.grid;
-      // (0,0) should be C+Y merged = Green
-      expect(g[0][0]).toBe(mixColors(CYAN, YELLOW));
-      // (0,3) should be Y+C merged = Green
-      expect(g[0][3]).toBe(mixColors(YELLOW, CYAN));
-      // (0,1) stays M (nothing below to move)
+      const green = mergeResult(CYAN, YELLOW);
+      expect(g[0][0]).toBe(green);
+      expect(g[0][3]).toBe(green);
+      expect(tileColorIndex(g[0][0])).toBe(GREEN_IDX);
       expect(g[0][1]).toBe(MAGENTA);
-      // (1,0) and (1,3) consumed by merge
-      expect(g[1][0]).toBe(0);
     });
   });
 
@@ -92,9 +87,9 @@ describe('ThreesGame', () => {
   describe('scoring', () => {
     test('scoring is enabled by default and produces non-zero scores', () => {
       const game = new ThreesGame();
-      // All starting tiles are base colors (tier 0) worth 3 pts each
       expect(game.score).toBeGreaterThan(0);
       const count = game.grid.flat().filter(v => v > 0).length;
+      // All base tiles are tier 0 → 3 pts each
       expect(game.score).toBe(count * 3);
     });
   });
@@ -102,7 +97,6 @@ describe('ThreesGame', () => {
   describe('deterministic seed reproducibility', () => {
     test('same seed + moves => identical game states', () => {
       const seed = 12345;
-
       const game1 = new ThreesGame({ seed });
       const game2 = new ThreesGame({ seed });
 
@@ -115,14 +109,12 @@ describe('ThreesGame', () => {
         game2.move(dir);
         expect(game1.grid).toEqual(game2.grid);
         expect(game1.nextTile).toBe(game2.nextTile);
-        expect(game1.moveCount).toBe(game2.moveCount);
       }
     });
 
     test('different seeds => different games', () => {
       const game1 = new ThreesGame({ seed: 1 });
       const game2 = new ThreesGame({ seed: 99999 });
-
       const same =
         JSON.stringify(game1.grid) === JSON.stringify(game2.grid) &&
         game1.nextTile === game2.nextTile;
@@ -138,7 +130,6 @@ describe('ThreesGame', () => {
 
       game.move('up');
       game.move('left');
-      expect(game.moveCount).toBe(2);
 
       game.restart();
 

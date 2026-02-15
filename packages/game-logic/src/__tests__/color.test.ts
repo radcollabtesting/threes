@@ -1,54 +1,72 @@
 import {
   encodeTile,
-  decodeTile,
-  tileRgb,
+  tileColorIndex,
+  tileDots,
   tileTier,
   tileHex,
   tileTextColor,
   tileLabel,
-  isSameColor,
-  mixColors,
+  canMerge,
+  mergeResult,
+  isBackwardMerge,
   CYAN,
   MAGENTA,
   YELLOW,
   BASE_TILES,
+  CYAN_IDX,
+  MAGENTA_IDX,
+  YELLOW_IDX,
+  BLUE_IDX,
+  RED_IDX,
+  GREEN_IDX,
+  ORANGE_IDX,
+  VIOLET_IDX,
+  CHARTREUSE_IDX,
+  TEAL_IDX,
+  TURQUOISE_IDX,
+  INDIGO_IDX,
+  BROWN_IDX,
+  BLACK_IDX,
 } from '../color';
 
-describe('color encoding/decoding', () => {
-  test('encode then decode round-trips correctly', () => {
-    const data = decodeTile(encodeTile(3, 10, 9, 0));
-    expect(data).toEqual({ r: 3, g: 10, b: 9, tier: 0 });
+describe('encoding / decoding', () => {
+  test('encode then decode round-trips: colorIndex and dots', () => {
+    const id = encodeTile(RED_IDX, 3);
+    expect(tileColorIndex(id)).toBe(RED_IDX);
+    expect(tileDots(id)).toBe(3);
   });
 
-  test('different RGB values produce different IDs', () => {
-    const c = encodeTile(3, 10, 9, 0);
-    const m = encodeTile(9, 3, 10, 0);
-    const y = encodeTile(10, 8, 3, 0);
-    expect(new Set([c, m, y]).size).toBe(3);
+  test('different color indices produce different IDs', () => {
+    const ids = new Set([
+      encodeTile(CYAN_IDX, 0),
+      encodeTile(MAGENTA_IDX, 0),
+      encodeTile(YELLOW_IDX, 0),
+    ]);
+    expect(ids.size).toBe(3);
   });
 
-  test('same RGB different tier produces different IDs', () => {
-    const t0 = encodeTile(5, 5, 5, 0);
-    const t1 = encodeTile(5, 5, 5, 1);
-    expect(t0).not.toBe(t1);
+  test('same color different dots produce different IDs', () => {
+    expect(encodeTile(RED_IDX, 0)).not.toBe(encodeTile(RED_IDX, 1));
   });
 
   test('all encoded values are positive (0 reserved for empty)', () => {
-    expect(encodeTile(0, 0, 0, 0)).toBeGreaterThan(0);
+    expect(encodeTile(0, 0)).toBeGreaterThan(0);
   });
 });
 
 describe('base tile constants', () => {
-  test('CYAN decodes to (3, 10, 9) tier 0', () => {
-    expect(decodeTile(CYAN)).toEqual({ r: 3, g: 10, b: 9, tier: 0 });
+  test('CYAN = encodeTile(CYAN_IDX, 0)', () => {
+    expect(CYAN).toBe(encodeTile(CYAN_IDX, 0));
+    expect(tileColorIndex(CYAN)).toBe(CYAN_IDX);
+    expect(tileDots(CYAN)).toBe(0);
   });
 
-  test('MAGENTA decodes to (9, 3, 10) tier 0', () => {
-    expect(decodeTile(MAGENTA)).toEqual({ r: 9, g: 3, b: 10, tier: 0 });
+  test('MAGENTA = encodeTile(MAGENTA_IDX, 0)', () => {
+    expect(MAGENTA).toBe(encodeTile(MAGENTA_IDX, 0));
   });
 
-  test('YELLOW decodes to (10, 8, 3) tier 0', () => {
-    expect(decodeTile(YELLOW)).toEqual({ r: 10, g: 8, b: 3, tier: 0 });
+  test('YELLOW = encodeTile(YELLOW_IDX, 0)', () => {
+    expect(YELLOW).toBe(encodeTile(YELLOW_IDX, 0));
   });
 
   test('BASE_TILES contains exactly C, M, Y', () => {
@@ -56,108 +74,222 @@ describe('base tile constants', () => {
   });
 });
 
-describe('tileRgb / tileTier', () => {
-  test('tileRgb extracts only the color channels', () => {
-    expect(tileRgb(CYAN)).toEqual({ r: 3, g: 10, b: 9 });
-  });
-
-  test('tileTier extracts the tier', () => {
+describe('tileTier', () => {
+  test('base colors are tier 0', () => {
     expect(tileTier(CYAN)).toBe(0);
-    const t2 = encodeTile(5, 5, 5, 2);
-    expect(tileTier(t2)).toBe(2);
+    expect(tileTier(MAGENTA)).toBe(0);
+    expect(tileTier(YELLOW)).toBe(0);
+  });
+
+  test('primary colors are tier 1', () => {
+    expect(tileTier(encodeTile(BLUE_IDX, 0))).toBe(1);
+    expect(tileTier(encodeTile(RED_IDX, 0))).toBe(1);
+    expect(tileTier(encodeTile(GREEN_IDX, 0))).toBe(1);
+  });
+
+  test('secondary colors are tier 2', () => {
+    expect(tileTier(encodeTile(ORANGE_IDX, 0))).toBe(2);
+    expect(tileTier(encodeTile(VIOLET_IDX, 0))).toBe(2);
+    expect(tileTier(encodeTile(TEAL_IDX, 0))).toBe(2);
+  });
+
+  test('Brown is tier 0 (warning tile)', () => {
+    expect(tileTier(encodeTile(BROWN_IDX, 0))).toBe(0);
+  });
+
+  test('Black is tier -1 (dead tile)', () => {
+    expect(tileTier(encodeTile(BLACK_IDX, 0))).toBe(-1);
   });
 });
 
-describe('isSameColor', () => {
-  test('same color returns true', () => {
-    expect(isSameColor(CYAN, CYAN)).toBe(true);
+describe('forward merges', () => {
+  test('C + M → Blue', () => {
+    const result = mergeResult(CYAN, MAGENTA);
+    expect(tileColorIndex(result)).toBe(BLUE_IDX);
+    expect(tileDots(result)).toBe(0);
   });
 
-  test('different color returns false', () => {
-    expect(isSameColor(CYAN, MAGENTA)).toBe(false);
+  test('M + Y → Red', () => {
+    const result = mergeResult(MAGENTA, YELLOW);
+    expect(tileColorIndex(result)).toBe(RED_IDX);
   });
 
-  test('same RGB but different tier still counts as same color', () => {
-    const a = encodeTile(5, 5, 5, 0);
-    const b = encodeTile(5, 5, 5, 3);
-    expect(isSameColor(a, b)).toBe(true);
+  test('Y + C → Green', () => {
+    const result = mergeResult(YELLOW, CYAN);
+    expect(tileColorIndex(result)).toBe(GREEN_IDX);
   });
 
-  test('empty (0) is never same color', () => {
-    expect(isSameColor(0, 0)).toBe(false);
-    expect(isSameColor(0, CYAN)).toBe(false);
+  test('R + Y → Orange', () => {
+    const R = encodeTile(RED_IDX, 0);
+    const result = mergeResult(R, YELLOW);
+    expect(tileColorIndex(result)).toBe(ORANGE_IDX);
+  });
+
+  test('R + M → Violet', () => {
+    const R = encodeTile(RED_IDX, 0);
+    const result = mergeResult(R, MAGENTA);
+    expect(tileColorIndex(result)).toBe(VIOLET_IDX);
+  });
+
+  test('G + Y → Chartreuse', () => {
+    const G = encodeTile(GREEN_IDX, 0);
+    const result = mergeResult(G, YELLOW);
+    expect(tileColorIndex(result)).toBe(CHARTREUSE_IDX);
+  });
+
+  test('G + C → Teal', () => {
+    const G = encodeTile(GREEN_IDX, 0);
+    const result = mergeResult(G, CYAN);
+    expect(tileColorIndex(result)).toBe(TEAL_IDX);
+  });
+
+  test('B + C → Turquoise', () => {
+    const B = encodeTile(BLUE_IDX, 0);
+    const result = mergeResult(B, CYAN);
+    expect(tileColorIndex(result)).toBe(TURQUOISE_IDX);
+  });
+
+  test('B + M → Indigo', () => {
+    const B = encodeTile(BLUE_IDX, 0);
+    const result = mergeResult(B, MAGENTA);
+    expect(tileColorIndex(result)).toBe(INDIGO_IDX);
+  });
+
+  test('forward merges are commutative', () => {
+    expect(mergeResult(CYAN, MAGENTA)).toBe(mergeResult(MAGENTA, CYAN));
+    expect(mergeResult(CYAN, YELLOW)).toBe(mergeResult(YELLOW, CYAN));
   });
 });
 
-describe('mixColors', () => {
-  test('C + M = Blue (6, 7, 10) tier 1', () => {
-    const result = mixColors(CYAN, MAGENTA);
-    const data = decodeTile(result);
-    expect(data.r).toBe(6);
-    expect(data.g).toBe(7);
-    expect(data.b).toBe(10);
-    expect(data.tier).toBe(1);
+describe('backward merges', () => {
+  test('Orange + Red → Red with +1 dot', () => {
+    const O = encodeTile(ORANGE_IDX, 0);
+    const R = encodeTile(RED_IDX, 0);
+    const result = mergeResult(O, R);
+    expect(tileColorIndex(result)).toBe(RED_IDX);
+    expect(tileDots(result)).toBe(1);
   });
 
-  test('M + Y = Red (10, 6, 7) tier 1', () => {
-    const result = mixColors(MAGENTA, YELLOW);
-    const data = decodeTile(result);
-    expect(data.r).toBe(10);
-    expect(data.g).toBe(6);
-    expect(data.b).toBe(7);
-    expect(data.tier).toBe(1);
+  test('Orange + Yellow → Yellow with +1 dot', () => {
+    const O = encodeTile(ORANGE_IDX, 0);
+    const result = mergeResult(O, YELLOW);
+    expect(tileColorIndex(result)).toBe(YELLOW_IDX);
+    expect(tileDots(result)).toBe(1);
   });
 
-  test('C + Y = Green (7, 9, 6) tier 1', () => {
-    const result = mixColors(CYAN, YELLOW);
-    const data = decodeTile(result);
-    expect(data.r).toBe(7);
-    expect(data.g).toBe(9);
-    expect(data.b).toBe(6);
-    expect(data.tier).toBe(1);
+  test('backward merge stacks dots on parent', () => {
+    const O = encodeTile(ORANGE_IDX, 0);
+    const R1 = encodeTile(RED_IDX, 1);
+    const result = mergeResult(O, R1);
+    expect(tileColorIndex(result)).toBe(RED_IDX);
+    expect(tileDots(result)).toBe(2);
   });
 
-  test('mixing is commutative', () => {
-    expect(mixColors(CYAN, MAGENTA)).toBe(mixColors(MAGENTA, CYAN));
-    expect(mixColors(CYAN, YELLOW)).toBe(mixColors(YELLOW, CYAN));
-    expect(mixColors(MAGENTA, YELLOW)).toBe(mixColors(YELLOW, MAGENTA));
+  test('isBackwardMerge detects backward merges', () => {
+    const O = encodeTile(ORANGE_IDX, 0);
+    const R = encodeTile(RED_IDX, 0);
+    expect(isBackwardMerge(O, R)).toBe(true);
+    expect(isBackwardMerge(R, O)).toBe(true);
   });
 
-  test('mixing different tiers produces max(tier)+1', () => {
-    const blue = mixColors(CYAN, MAGENTA); // tier 1
-    const result = mixColors(blue, YELLOW); // tier 0 + tier 1 = tier 2
-    expect(tileTier(result)).toBe(2);
+  test('isBackwardMerge returns false for forward merges', () => {
+    expect(isBackwardMerge(CYAN, MAGENTA)).toBe(false);
+  });
+
+  test('Indigo + Blue → Blue with +1 dot', () => {
+    const I = encodeTile(INDIGO_IDX, 0);
+    const B = encodeTile(BLUE_IDX, 0);
+    const result = mergeResult(I, B);
+    expect(tileColorIndex(result)).toBe(BLUE_IDX);
+    expect(tileDots(result)).toBe(1);
+  });
+});
+
+describe('Brown and Black mechanics', () => {
+  test('unlisted combo → Brown', () => {
+    const R = encodeTile(RED_IDX, 0);
+    const B = encodeTile(BLUE_IDX, 0);
+    const result = mergeResult(R, B);
+    expect(tileColorIndex(result)).toBe(BROWN_IDX);
+  });
+
+  test('Brown + Brown cannot merge', () => {
+    const br1 = encodeTile(BROWN_IDX, 0);
+    const br2 = encodeTile(BROWN_IDX, 0);
+    expect(canMerge(br1, br2)).toBe(false);
+  });
+
+  test('Brown + base → Black', () => {
+    const br = encodeTile(BROWN_IDX, 0);
+    expect(canMerge(br, CYAN)).toBe(true);
+    const result = mergeResult(br, CYAN);
+    expect(tileColorIndex(result)).toBe(BLACK_IDX);
+  });
+
+  test('Brown + non-base cannot merge', () => {
+    const br = encodeTile(BROWN_IDX, 0);
+    const R = encodeTile(RED_IDX, 0);
+    expect(canMerge(br, R)).toBe(false);
+  });
+
+  test('Black cannot merge with anything', () => {
+    const bl = encodeTile(BLACK_IDX, 0);
+    expect(canMerge(bl, CYAN)).toBe(false);
+    expect(canMerge(bl, encodeTile(RED_IDX, 0))).toBe(false);
+    expect(canMerge(bl, encodeTile(BROWN_IDX, 0))).toBe(false);
+    expect(canMerge(bl, bl)).toBe(false);
+  });
+});
+
+describe('canMerge', () => {
+  test('same color cannot merge', () => {
+    expect(canMerge(CYAN, CYAN)).toBe(false);
+    expect(canMerge(MAGENTA, MAGENTA)).toBe(false);
+  });
+
+  test('empty cells never merge', () => {
+    expect(canMerge(0, 0)).toBe(false);
+    expect(canMerge(0, CYAN)).toBe(false);
+  });
+
+  test('different non-special colors can merge', () => {
+    expect(canMerge(CYAN, MAGENTA)).toBe(true);
+    expect(canMerge(CYAN, YELLOW)).toBe(true);
+  });
+
+  test('primary + primary can merge (produces brown)', () => {
+    const R = encodeTile(RED_IDX, 0);
+    const B = encodeTile(BLUE_IDX, 0);
+    expect(canMerge(R, B)).toBe(true);
   });
 });
 
 describe('tileHex', () => {
-  test('CYAN produces expected hex color', () => {
-    // (3,10,9) → (77, 255, 230) → #4dffe6
-    const hex = tileHex(CYAN);
-    expect(hex).toMatch(/^#[0-9a-f]{6}$/);
-    expect(hex).toBe('#4dffe6');
+  test('CYAN produces #53ffec', () => {
+    expect(tileHex(CYAN)).toBe('#53ffec');
   });
 
-  test('MAGENTA produces expected hex color', () => {
-    // (9,3,10) → (230, 77, 255) → #e64dff
-    expect(tileHex(MAGENTA)).toBe('#e64dff');
+  test('MAGENTA produces #e854ff', () => {
+    expect(tileHex(MAGENTA)).toBe('#e854ff');
   });
 
-  test('YELLOW produces expected hex color', () => {
-    // (10,8,3) → (255, 204, 77) → #ffcc4d
-    expect(tileHex(YELLOW)).toBe('#ffcc4d');
+  test('YELLOW produces #ffd654', () => {
+    expect(tileHex(YELLOW)).toBe('#ffd654');
+  });
+
+  test('dotted tiles have same hex as undotted', () => {
+    const r0 = encodeTile(RED_IDX, 0);
+    const r3 = encodeTile(RED_IDX, 3);
+    expect(tileHex(r0)).toBe(tileHex(r3));
   });
 });
 
 describe('tileTextColor', () => {
-  test('returns white for dark colors', () => {
-    // A tile with low luminance
-    const dark = encodeTile(1, 1, 1, 0);
-    expect(tileTextColor(dark)).toBe('#FFFFFF');
+  test('returns white for dark colors (Black)', () => {
+    expect(tileTextColor(encodeTile(BLACK_IDX, 0))).toBe('#FFFFFF');
   });
 
-  test('returns black for bright colors', () => {
-    // Yellow is bright
+  test('returns black for bright colors (Yellow)', () => {
     expect(tileTextColor(YELLOW)).toBe('#000000');
   });
 });
@@ -169,18 +301,24 @@ describe('tileLabel', () => {
     expect(tileLabel(YELLOW)).toBe('Y');
   });
 
-  test('primary mixes have labels', () => {
-    const blue = mixColors(CYAN, MAGENTA);
-    const red = mixColors(MAGENTA, YELLOW);
-    const green = mixColors(CYAN, YELLOW);
-    expect(tileLabel(blue)).toBe('B');
-    expect(tileLabel(red)).toBe('R');
-    expect(tileLabel(green)).toBe('G');
+  test('primary colors have labels', () => {
+    expect(tileLabel(encodeTile(BLUE_IDX, 0))).toBe('B');
+    expect(tileLabel(encodeTile(RED_IDX, 0))).toBe('R');
+    expect(tileLabel(encodeTile(GREEN_IDX, 0))).toBe('G');
   });
 
-  test('deeper mixes have no label', () => {
-    const blue = mixColors(CYAN, MAGENTA);
-    const deeper = mixColors(blue, YELLOW);
-    expect(tileLabel(deeper)).toBeNull();
+  test('secondary colors have no label', () => {
+    expect(tileLabel(encodeTile(ORANGE_IDX, 0))).toBeNull();
+    expect(tileLabel(encodeTile(VIOLET_IDX, 0))).toBeNull();
+  });
+
+  test('Brown and Black have no label', () => {
+    expect(tileLabel(encodeTile(BROWN_IDX, 0))).toBeNull();
+    expect(tileLabel(encodeTile(BLACK_IDX, 0))).toBeNull();
+  });
+
+  test('dotted tiles still show label', () => {
+    const r2 = encodeTile(RED_IDX, 2);
+    expect(tileLabel(r2)).toBe('R');
   });
 });

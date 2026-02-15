@@ -1,7 +1,11 @@
 import { canMerge, mergeResult } from '../merge';
-import { CYAN, MAGENTA, YELLOW, mixColors, isSameColor, tileTier } from '../color';
+import {
+  CYAN, MAGENTA, YELLOW,
+  encodeTile, tileColorIndex, tileDots,
+  BLUE_IDX, RED_IDX, GREEN_IDX, ORANGE_IDX, BROWN_IDX, BLACK_IDX,
+} from '../color';
 
-describe('color merge rules', () => {
+describe('merge rules (via merge.ts delegation)', () => {
   test('different colors CAN merge: C + M', () => {
     expect(canMerge(CYAN, MAGENTA)).toBe(true);
   });
@@ -10,61 +14,50 @@ describe('color merge rules', () => {
     expect(canMerge(CYAN, YELLOW)).toBe(true);
   });
 
-  test('different colors CAN merge: M + Y', () => {
-    expect(canMerge(MAGENTA, YELLOW)).toBe(true);
-  });
-
   test('same color CANNOT merge: C + C', () => {
     expect(canMerge(CYAN, CYAN)).toBe(false);
-  });
-
-  test('same color CANNOT merge: M + M', () => {
-    expect(canMerge(MAGENTA, MAGENTA)).toBe(false);
-  });
-
-  test('same color CANNOT merge: Y + Y', () => {
-    expect(canMerge(YELLOW, YELLOW)).toBe(false);
   });
 
   test('empty cells (0) never merge', () => {
     expect(canMerge(0, 0)).toBe(false);
     expect(canMerge(0, CYAN)).toBe(false);
-    expect(canMerge(CYAN, 0)).toBe(false);
-  });
-
-  test('merged color can merge with a different color', () => {
-    const blue = mergeResult(CYAN, MAGENTA);
-    // Blue is different from Yellow
-    expect(canMerge(blue, YELLOW)).toBe(true);
-  });
-
-  test('merged color CANNOT merge with itself', () => {
-    const blue = mergeResult(CYAN, MAGENTA);
-    expect(canMerge(blue, blue)).toBe(false);
-  });
-
-  test('base color can merge with a primary result', () => {
-    const red = mergeResult(MAGENTA, YELLOW);
-    expect(canMerge(red, CYAN)).toBe(true);
   });
 });
 
-describe('mergeResult', () => {
-  test('C + M produces Blue (tier 1)', () => {
+describe('mergeResult (via merge.ts delegation)', () => {
+  test('C + M → Blue', () => {
     const result = mergeResult(CYAN, MAGENTA);
-    expect(tileTier(result)).toBe(1);
-    expect(!isSameColor(result, CYAN)).toBe(true);
-    expect(!isSameColor(result, MAGENTA)).toBe(true);
+    expect(tileColorIndex(result)).toBe(BLUE_IDX);
   });
 
-  test('mergeResult is the same as mixColors', () => {
-    expect(mergeResult(CYAN, YELLOW)).toBe(mixColors(CYAN, YELLOW));
-    expect(mergeResult(MAGENTA, YELLOW)).toBe(mixColors(MAGENTA, YELLOW));
+  test('M + Y → Red', () => {
+    const result = mergeResult(MAGENTA, YELLOW);
+    expect(tileColorIndex(result)).toBe(RED_IDX);
   });
 
-  test('deeper merges increment tier', () => {
-    const blue = mergeResult(CYAN, MAGENTA); // tier 1
-    const deeper = mergeResult(blue, YELLOW); // tier 2
-    expect(tileTier(deeper)).toBe(2);
+  test('Y + C → Green', () => {
+    const result = mergeResult(YELLOW, CYAN);
+    expect(tileColorIndex(result)).toBe(GREEN_IDX);
+  });
+
+  test('backward merge: Orange + Red → Red with dot', () => {
+    const O = encodeTile(ORANGE_IDX, 0);
+    const R = encodeTile(RED_IDX, 0);
+    const result = mergeResult(O, R);
+    expect(tileColorIndex(result)).toBe(RED_IDX);
+    expect(tileDots(result)).toBe(1);
+  });
+
+  test('unlisted combo → Brown', () => {
+    const R = encodeTile(RED_IDX, 0);
+    const G = encodeTile(GREEN_IDX, 0);
+    const result = mergeResult(R, G);
+    expect(tileColorIndex(result)).toBe(BROWN_IDX);
+  });
+
+  test('Brown + base → Black', () => {
+    const br = encodeTile(BROWN_IDX, 0);
+    const result = mergeResult(br, CYAN);
+    expect(tileColorIndex(result)).toBe(BLACK_IDX);
   });
 });
