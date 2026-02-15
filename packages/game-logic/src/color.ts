@@ -106,11 +106,27 @@ HEX_MAP[CHARTREUSE_IDX] = '#c8ff54';
 HEX_MAP[TEAL_IDX] = '#2db890';
 HEX_MAP[TURQUOISE_IDX] = '#54b4ff';
 HEX_MAP[INDIGO_IDX] = '#8054ff';
-HEX_MAP[GRAY_IDX] = '#888888';
+// Gray uses a dynamic scale — see grayHex() below.
+// HEX_MAP[GRAY_IDX] is intentionally left unset.
+
+/**
+ * Returns a gray hex that darkens with each merge.
+ * Starts light (#B0B0B0) and steps down ~26 per merge, clamped at #2E2E2E.
+ */
+function grayHex(dots: number): string {
+  const start = 0xB0; // 176 — light gray
+  const floor = 0x2E; //  46 — near black
+  const step = 26;
+  const v = Math.max(floor, start - dots * step);
+  const h = v.toString(16).padStart(2, '0');
+  return `#${h}${h}${h}`;
+}
 
 export function tileHex(id: CellValue): string {
   if (id === 0) return '#000000';
-  return HEX_MAP[tileColorIndex(id)] ?? '#000000';
+  const ci = tileColorIndex(id);
+  if (ci === GRAY_IDX) return grayHex(tileDots(id));
+  return HEX_MAP[ci] ?? '#000000';
 }
 
 /** Returns a suitable text color (black or white) for readability. */

@@ -324,8 +324,18 @@ describe('tileHex', () => {
     expect(tileHex(r0)).toBe(tileHex(r3));
   });
 
-  test('Gray has hex color', () => {
-    expect(tileHex(encodeTile(GRAY_IDX, 0))).toBe('#888888');
+  test('Gray hex darkens with each merge', () => {
+    // Fresh gray (0 dots) is lightest
+    expect(tileHex(encodeTile(GRAY_IDX, 0))).toBe('#b0b0b0');
+    // Each merge gets darker
+    expect(tileHex(encodeTile(GRAY_IDX, 1))).toBe('#969696');
+    expect(tileHex(encodeTile(GRAY_IDX, 2))).toBe('#7c7c7c');
+    expect(tileHex(encodeTile(GRAY_IDX, 3))).toBe('#626262');
+    expect(tileHex(encodeTile(GRAY_IDX, 4))).toBe('#484848');
+    expect(tileHex(encodeTile(GRAY_IDX, 5))).toBe('#2e2e2e');
+    // Clamps at near-black
+    expect(tileHex(encodeTile(GRAY_IDX, 6))).toBe('#2e2e2e');
+    expect(tileHex(encodeTile(GRAY_IDX, 10))).toBe('#2e2e2e');
   });
 });
 
