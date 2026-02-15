@@ -41,6 +41,7 @@ export class ThreesGame {
   private _rng: () => number;
   private _nextTileGen: (grid: Grid) => CellValue;
   private _lastMoveEvents: MoveEvent[];
+  private _turnMergeSeed = 0;
 
   constructor(configOverrides?: Partial<GameConfig>) {
     this.config = resolveConfig(configOverrides);
@@ -88,6 +89,15 @@ export class ThreesGame {
     return [...this._lastMoveEvents];
   }
 
+  /**
+   * Seed for this turn's merge RNG. Use `createRng(turnMergeSeed)` to create
+   * a fresh RNG that produces the same merge results as the actual move.
+   * Stable for the current turn — re-previewing gives the same colors.
+   */
+  get turnMergeSeed(): number {
+    return this._turnMergeSeed;
+  }
+
   /** Serializable snapshot of the full game state */
   getState(): GameState {
     return {
@@ -119,11 +129,12 @@ export class ThreesGame {
 
     this._lastMoveEvents = [];
 
-    // 1-2. Apply movement + merges
+    // 1-2. Apply movement + merges (use turn-specific merge RNG for deterministic previews)
+    const mergeRng = createRng(this._turnMergeSeed);
     const { newGrid, changed, changedLines, events } = applyMove(
       this._grid,
       direction,
-      this._rng,
+      mergeRng,
     );
 
     // Invalid move: do nothing
@@ -153,6 +164,9 @@ export class ThreesGame {
 
     // 4. Draw a new next tile
     this._nextTile = this._nextTileGen(this._grid);
+
+    // 4b. Pre-roll merge seed for the next turn
+    this._turnMergeSeed = Math.floor(this._rng() * 2147483647);
 
     // 5. Update score (never decreases)
     if (this.config.scoringEnabled) {
@@ -203,6 +217,9 @@ export class ThreesGame {
     if (this.config.scoringEnabled) {
       this._score = scoreGrid(this._grid);
     }
+
+    // Pre-roll merge seed for the first turn
+    this._turnMergeSeed = Math.floor(this._rng() * 2147483647);
   }
 
   /**
