@@ -25,8 +25,6 @@ import {
   TEAL_IDX,
   TURQUOISE_IDX,
   INDIGO_IDX,
-  BROWN_IDX,
-  BLACK_IDX,
 } from '../color';
 
 describe('encoding / decoding', () => {
@@ -91,14 +89,6 @@ describe('tileTier', () => {
     expect(tileTier(encodeTile(ORANGE_IDX, 0))).toBe(2);
     expect(tileTier(encodeTile(VIOLET_IDX, 0))).toBe(2);
     expect(tileTier(encodeTile(TEAL_IDX, 0))).toBe(2);
-  });
-
-  test('Brown is tier 0 (warning tile)', () => {
-    expect(tileTier(encodeTile(BROWN_IDX, 0))).toBe(0);
-  });
-
-  test('Black is tier -1 (dead tile)', () => {
-    expect(tileTier(encodeTile(BLACK_IDX, 0))).toBe(-1);
   });
 });
 
@@ -205,39 +195,42 @@ describe('backward merges', () => {
   });
 });
 
-describe('Brown and Black mechanics', () => {
-  test('unlisted combo → Brown', () => {
+describe('unlisted combos are blocked', () => {
+  test('Red + Blue cannot merge (not in table)', () => {
     const R = encodeTile(RED_IDX, 0);
     const B = encodeTile(BLUE_IDX, 0);
-    const result = mergeResult(R, B);
-    expect(tileColorIndex(result)).toBe(BROWN_IDX);
+    expect(canMerge(R, B)).toBe(false);
   });
 
-  test('Brown + Brown cannot merge', () => {
-    const br1 = encodeTile(BROWN_IDX, 0);
-    const br2 = encodeTile(BROWN_IDX, 0);
-    expect(canMerge(br1, br2)).toBe(false);
-  });
-
-  test('Brown + base → Black', () => {
-    const br = encodeTile(BROWN_IDX, 0);
-    expect(canMerge(br, CYAN)).toBe(true);
-    const result = mergeResult(br, CYAN);
-    expect(tileColorIndex(result)).toBe(BLACK_IDX);
-  });
-
-  test('Brown + non-base cannot merge', () => {
-    const br = encodeTile(BROWN_IDX, 0);
+  test('Red + Green cannot merge', () => {
     const R = encodeTile(RED_IDX, 0);
-    expect(canMerge(br, R)).toBe(false);
+    const G = encodeTile(GREEN_IDX, 0);
+    expect(canMerge(R, G)).toBe(false);
   });
 
-  test('Black cannot merge with anything', () => {
-    const bl = encodeTile(BLACK_IDX, 0);
-    expect(canMerge(bl, CYAN)).toBe(false);
-    expect(canMerge(bl, encodeTile(RED_IDX, 0))).toBe(false);
-    expect(canMerge(bl, encodeTile(BROWN_IDX, 0))).toBe(false);
-    expect(canMerge(bl, bl)).toBe(false);
+  test('Blue + Green cannot merge', () => {
+    const B = encodeTile(BLUE_IDX, 0);
+    const G = encodeTile(GREEN_IDX, 0);
+    expect(canMerge(B, G)).toBe(false);
+  });
+
+  test('Orange + Violet cannot merge', () => {
+    const O = encodeTile(ORANGE_IDX, 0);
+    const V = encodeTile(VIOLET_IDX, 0);
+    expect(canMerge(O, V)).toBe(false);
+  });
+
+  test('secondary + non-parent primary cannot merge', () => {
+    // Orange parents are Red and Yellow; Blue is not a parent
+    const O = encodeTile(ORANGE_IDX, 0);
+    const B = encodeTile(BLUE_IDX, 0);
+    expect(canMerge(O, B)).toBe(false);
+  });
+
+  test('secondary + unrelated base cannot merge', () => {
+    // Orange parents are Red and Yellow; Cyan is not a parent
+    const O = encodeTile(ORANGE_IDX, 0);
+    expect(canMerge(O, CYAN)).toBe(false);
   });
 });
 
@@ -252,15 +245,17 @@ describe('canMerge', () => {
     expect(canMerge(0, CYAN)).toBe(false);
   });
 
-  test('different non-special colors can merge', () => {
+  test('listed forward pairs can merge', () => {
     expect(canMerge(CYAN, MAGENTA)).toBe(true);
     expect(canMerge(CYAN, YELLOW)).toBe(true);
+    expect(canMerge(MAGENTA, YELLOW)).toBe(true);
   });
 
-  test('primary + primary can merge (produces brown)', () => {
+  test('backward merge pairs can merge', () => {
+    const O = encodeTile(ORANGE_IDX, 0);
     const R = encodeTile(RED_IDX, 0);
-    const B = encodeTile(BLUE_IDX, 0);
-    expect(canMerge(R, B)).toBe(true);
+    expect(canMerge(O, R)).toBe(true);
+    expect(canMerge(O, YELLOW)).toBe(true);
   });
 });
 
@@ -285,8 +280,8 @@ describe('tileHex', () => {
 });
 
 describe('tileTextColor', () => {
-  test('returns white for dark colors (Black)', () => {
-    expect(tileTextColor(encodeTile(BLACK_IDX, 0))).toBe('#FFFFFF');
+  test('returns white for dark colors (Blue)', () => {
+    expect(tileTextColor(encodeTile(BLUE_IDX, 0))).toBe('#FFFFFF');
   });
 
   test('returns black for bright colors (Yellow)', () => {
@@ -310,11 +305,6 @@ describe('tileLabel', () => {
   test('secondary colors have no label', () => {
     expect(tileLabel(encodeTile(ORANGE_IDX, 0))).toBeNull();
     expect(tileLabel(encodeTile(VIOLET_IDX, 0))).toBeNull();
-  });
-
-  test('Brown and Black have no label', () => {
-    expect(tileLabel(encodeTile(BROWN_IDX, 0))).toBeNull();
-    expect(tileLabel(encodeTile(BLACK_IDX, 0))).toBeNull();
   });
 
   test('dotted tiles still show label', () => {

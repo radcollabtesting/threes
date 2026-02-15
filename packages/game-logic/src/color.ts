@@ -1,7 +1,7 @@
 /**
  * Named color system with merge lookup table.
  *
- * 14 named colors: 3 base, 3 primary, 6 secondary, Brown, Black.
+ * 12 named colors: 3 base, 3 primary, 6 secondary.
  *
  * Encoding: id = colorIndex + dots * NUM_COLORS + 1
  *   (0 is reserved for empty cells)
@@ -9,10 +9,7 @@
  * Merge rules:
  *   - Forward merges: 9 specific pairs produce named results (0 dots).
  *   - Backward merges: secondary + one of its parents → parent with +1 dot.
- *   - Unlisted combos → Brown (0 dots).
- *   - Brown + base → Black.
- *   - Brown + Brown → cannot merge (same color).
- *   - Black + anything → cannot merge.
+ *   - Unlisted combos → blocked (canMerge returns false).
  *   - Same colorIndex → cannot merge.
  */
 
@@ -32,9 +29,7 @@ export const CHARTREUSE_IDX = 8;
 export const TEAL_IDX = 9;
 export const TURQUOISE_IDX = 10;
 export const INDIGO_IDX = 11;
-export const BROWN_IDX = 12;
-export const BLACK_IDX = 13;
-export const NUM_COLORS = 14;
+export const NUM_COLORS = 12;
 
 /* ── Encoding / Decoding ──────────────────────────────── */
 
@@ -65,8 +60,6 @@ export function tileTier(id: CellValue): number {
   if (BASE_INDICES.has(ci)) return 0;
   if (PRIMARY_INDICES.has(ci)) return 1;
   if (SECONDARY_INDICES.has(ci)) return 2;
-  if (ci === BROWN_IDX) return 0; // Brown: low value (warning tile)
-  if (ci === BLACK_IDX) return -1; // Black: dead tile, no score
   return 0;
 }
 
@@ -85,8 +78,6 @@ HEX_MAP[CHARTREUSE_IDX] = '#c8ff54';
 HEX_MAP[TEAL_IDX] = '#54ffc8';
 HEX_MAP[TURQUOISE_IDX] = '#54b4ff';
 HEX_MAP[INDIGO_IDX] = '#8054ff';
-HEX_MAP[BROWN_IDX] = '#8B5E3C';
-HEX_MAP[BLACK_IDX] = '#1a1a1a';
 
 export function tileHex(id: CellValue): string {
   if (id === 0) return '#000000';
@@ -112,7 +103,7 @@ LABEL_MAP[YELLOW_IDX] = 'Y';
 LABEL_MAP[BLUE_IDX] = 'B';
 LABEL_MAP[RED_IDX] = 'R';
 LABEL_MAP[GREEN_IDX] = 'G';
-// Secondaries, Brown, Black: no letter label (just show color)
+// Secondaries: no letter label (just show color)
 
 /** Returns single-letter label for base/primary colors, null otherwise. */
 export function tileLabel(id: CellValue): string | null {
@@ -153,6 +144,15 @@ const SECONDARY_PARENTS = new Map<number, number[]>([
 
 /* ── Merge logic ─────────────────────────────────────── */
 
+/** Check if a pair is a backward merge (secondary + parent). */
+function isBackward(ciA: number, ciB: number): boolean {
+  const parentsA = SECONDARY_PARENTS.get(ciA);
+  if (parentsA && parentsA.includes(ciB)) return true;
+  const parentsB = SECONDARY_PARENTS.get(ciB);
+  if (parentsB && parentsB.includes(ciA)) return true;
+  return false;
+}
+
 export function canMerge(a: CellValue, b: CellValue): boolean {
   if (a === 0 || b === 0) return false;
 
@@ -162,27 +162,16 @@ export function canMerge(a: CellValue, b: CellValue): boolean {
   // Same color can never merge
   if (ciA === ciB) return false;
 
-  // Black is fully dead — can never merge
-  if (ciA === BLACK_IDX || ciB === BLACK_IDX) return false;
+  // Only allow forward merges (in table) or backward merges (secondary + parent)
+  if (FORWARD_MERGES.has(mergeKey(ciA, ciB))) return true;
+  if (isBackward(ciA, ciB)) return true;
 
-  // Brown + base → Black (allowed); Brown + anything else → no
-  if (ciA === BROWN_IDX || ciB === BROWN_IDX) {
-    const other = ciA === BROWN_IDX ? ciB : ciA;
-    return BASE_INDICES.has(other);
-  }
-
-  // Everything else is allowed (forward, backward, or unlisted → brown)
-  return true;
+  return false;
 }
 
 export function mergeResult(a: CellValue, b: CellValue): CellValue {
   const ciA = tileColorIndex(a);
   const ciB = tileColorIndex(b);
-
-  // Brown + base → Black
-  if (ciA === BROWN_IDX || ciB === BROWN_IDX) {
-    return encodeTile(BLACK_IDX, 0);
-  }
 
   // Check forward merge table
   const fwd = FORWARD_MERGES.get(mergeKey(ciA, ciB));
@@ -190,14 +179,14 @@ export function mergeResult(a: CellValue, b: CellValue): CellValue {
     return encodeTile(fwd, 0);
   }
 
-  // Check backward merge: secondary + parent → parent with +1 dot
+  // Backward merge: secondary + parent → parent with +1 dot
   const backA = tryBackwardMerge(ciA, ciB, a, b);
   if (backA !== null) return backA;
   const backB = tryBackwardMerge(ciB, ciA, b, a);
   if (backB !== null) return backB;
 
-  // Unlisted combination → Brown
-  return encodeTile(BROWN_IDX, 0);
+  // Should not reach here if canMerge was checked first
+  return a;
 }
 
 function tryBackwardMerge(
@@ -215,16 +204,7 @@ function tryBackwardMerge(
 /** True if this merge was a backward merge (secondary + parent). */
 export function isBackwardMerge(a: CellValue, b: CellValue): boolean {
   if (a === 0 || b === 0) return false;
-  const ciA = tileColorIndex(a);
-  const ciB = tileColorIndex(b);
-
-  const parentsA = SECONDARY_PARENTS.get(ciA);
-  if (parentsA && parentsA.includes(ciB)) return true;
-
-  const parentsB = SECONDARY_PARENTS.get(ciB);
-  if (parentsB && parentsB.includes(ciA)) return true;
-
-  return false;
+  return isBackward(tileColorIndex(a), tileColorIndex(b));
 }
 
 /* ── Base tile constants ─────────────────────────────── */

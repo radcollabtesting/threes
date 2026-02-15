@@ -43,8 +43,6 @@ export {
   TEAL_IDX,
   TURQUOISE_IDX,
   INDIGO_IDX,
-  BROWN_IDX,
-  BLACK_IDX,
   NUM_COLORS,
 } from './color';
 

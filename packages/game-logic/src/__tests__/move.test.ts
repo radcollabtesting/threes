@@ -1,7 +1,7 @@
 import { applyMove, isValidMove, hasAnyValidMove } from '../move';
 import {
   CYAN, MAGENTA, YELLOW, encodeTile, tileColorIndex,
-  BLUE_IDX, BROWN_IDX, BLACK_IDX,
+  BLUE_IDX, RED_IDX,
 } from '../color';
 import type { Grid } from '../types';
 
@@ -94,17 +94,21 @@ describe('applyMove — merge during movement', () => {
     expect(newGrid[0][2]).toBe(0);
   });
 
-  test('unlisted merge produces Brown', () => {
-    const R = encodeTile(4, 0); // RED_IDX
-    const B = encodeTile(3, 0); // BLUE_IDX
+  test('unlisted combo blocks merge — tiles just slide', () => {
+    const R = encodeTile(RED_IDX, 0);
+    const B = encodeTile(BLUE_IDX, 0);
+    // R + B is not in the merge table, so they can't merge
     const grid: Grid = [
       [B, R, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
     ];
-    const { newGrid } = applyMove(grid, 'left');
-    expect(tileColorIndex(newGrid[0][0])).toBe(BROWN_IDX);
+    const { newGrid, changed } = applyMove(grid, 'left');
+    // B is at leading edge (col 0), R can't merge with B, so nothing moves
+    expect(changed).toBe(false);
+    expect(newGrid[0][0]).toBe(B);
+    expect(newGrid[0][1]).toBe(R);
   });
 });
 
@@ -173,16 +177,5 @@ describe('hasAnyValidMove', () => {
       [C, C, C, C],
     ];
     expect(hasAnyValidMove(grid)).toBe(true);
-  });
-
-  test('false for full board of Black tiles (all dead)', () => {
-    const BL = encodeTile(BLACK_IDX, 0);
-    const grid: Grid = [
-      [BL, BL, BL, BL],
-      [BL, BL, BL, BL],
-      [BL, BL, BL, BL],
-      [BL, BL, BL, BL],
-    ];
-    expect(hasAnyValidMove(grid)).toBe(false);
   });
 });
