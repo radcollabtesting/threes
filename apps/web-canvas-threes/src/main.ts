@@ -11,8 +11,9 @@
  * Touch/mouse: drag to preview, release past 50% to commit.
  */
 
-import { ThreesGame, cloneGrid, scoreGrid, type Direction } from '@threes/game-logic';
+import { ThreesGame, cloneGrid, scoreGrid, type Direction, type MoveEvent } from '@threes/game-logic';
 import { Renderer } from './renderer';
+import type { GameOverData, TutorialRenderInfo } from './renderer';
 import {
   createAnimState,
   triggerMoveAnimations,
@@ -34,7 +35,15 @@ import {
 } from './drag';
 import { saveScore } from './score-history';
 import { playMergeSound } from './audio';
-import type { GameOverData } from './renderer';
+import {
+  createTutorialState,
+  tutorialMove,
+  tutorialHeader,
+  tutorialShowBorder,
+  tutorialShowNextTile,
+  tutorialShowContinue,
+  type TutorialState,
+} from './tutorial';
 
 /* ── Parse query-param config ──────────────────────────── */
 
@@ -54,6 +63,7 @@ const drag: DragState = createDragState();
 
 let game = new ThreesGame({ seed, fixtureMode, nextTileStrategy, scoringEnabled });
 let gameOverData: GameOverData | null = null;
+let tutorial: TutorialState | null = null;
 
 function onGameOver(): void {
   const finalScore = scoreGrid(game.grid);
@@ -67,13 +77,39 @@ function onGameOver(): void {
 
 /* ── Audio helper ──────────────────────────────────────── */
 
-function playMergeSounds(): void {
-  for (const ev of game.lastMoveEvents) {
+function playMergeSoundsFromEvents(events: MoveEvent[]): void {
+  for (const ev of events) {
     if (ev.type === 'merge') {
-      // Play merge sound (use 3 sound for all merges)
       playMergeSound(3);
     }
   }
+}
+
+/* ── Tutorial ──────────────────────────────────────────── */
+
+const tutorialBtn = document.getElementById('tutorial-btn') as HTMLButtonElement;
+
+function startTutorial(): void {
+  tutorial = createTutorialState();
+  resetDrag(drag);
+  gameOverData = null;
+  tutorialBtn.style.display = 'none';
+}
+
+function endTutorial(): void {
+  tutorial = null;
+  game.restart();
+  resetDrag(drag);
+  gameOverData = null;
+  tutorialBtn.style.display = '';
+  localStorage.setItem('tutorialComplete', '1');
+}
+
+tutorialBtn.addEventListener('click', startTutorial);
+
+// Auto-start tutorial on first visit
+if (!localStorage.getItem('tutorialComplete')) {
+  startTutorial();
 }
 
 /* ── Input handlers ────────────────────────────────────── */
@@ -83,6 +119,22 @@ function playMergeSounds(): void {
  */
 function handleInstantMove(direction: Direction): void {
   if (drag.phase !== 'idle') return;
+
+  if (tutorial) {
+    const oldNext = tutorial.nextTile;
+    const success = tutorialMove(tutorial, direction);
+    if (success) {
+      triggerMoveAnimations(tutorial.lastMoveEvents, anim, direction);
+      if (tutorialShowNextTile(tutorial)) {
+        triggerNextTileAnim(anim, oldNext, tutorial.nextTile);
+      }
+      playMergeSoundsFromEvents(tutorial.lastMoveEvents);
+    } else {
+      triggerShake(anim);
+    }
+    return;
+  }
+
   if (game.status === 'ended') return;
 
   const oldNext = game.nextTile;
@@ -90,7 +142,7 @@ function handleInstantMove(direction: Direction): void {
   if (success) {
     triggerMoveAnimations(game.lastMoveEvents, anim, direction);
     triggerNextTileAnim(anim, oldNext, game.nextTile);
-    playMergeSounds();
+    playMergeSoundsFromEvents(game.lastMoveEvents);
     if ((game.status as string) === 'ended') onGameOver();
   } else {
     triggerShake(anim);
@@ -98,6 +150,7 @@ function handleInstantMove(direction: Direction): void {
 }
 
 function handleNewGame(): void {
+  if (tutorial) return; // ignore R key during tutorial
   game.restart();
   resetDrag(drag);
   gameOverData = null;
@@ -107,8 +160,19 @@ function handleNewGame(): void {
  * Pointer down — snapshot the grid and enter pending state.
  */
 function handleDragStart(x: number, y: number): void {
-  if (game.status === 'ended') return;
   if (drag.phase !== 'idle') return;
+
+  if (tutorial) {
+    drag.phase = 'pending';
+    drag.startX = x;
+    drag.startY = y;
+    drag.currentX = x;
+    drag.currentY = y;
+    drag.gridSnapshot = cloneGrid(tutorial.grid);
+    return;
+  }
+
+  if (game.status === 'ended') return;
 
   drag.phase = 'pending';
   drag.startX = x;
@@ -186,16 +250,27 @@ const inputCallbacks: InputCallbacks = {
 
 setupInput(canvas, inputCallbacks);
 
-/* ── "New Game" button click ──────────────────────────── */
+/* ── Button click handlers ─────────────────────────────── */
 
 canvas.addEventListener('click', (e: MouseEvent) => {
-  const bounds = renderer.newGameButtonBounds;
-  if (!bounds) return;
-  if (
-    e.clientX >= bounds.x && e.clientX <= bounds.x + bounds.w &&
-    e.clientY >= bounds.y && e.clientY <= bounds.y + bounds.h
+  // "New Game" button (game-over overlay)
+  const newGameBounds = renderer.newGameButtonBounds;
+  if (newGameBounds &&
+    e.clientX >= newGameBounds.x && e.clientX <= newGameBounds.x + newGameBounds.w &&
+    e.clientY >= newGameBounds.y && e.clientY <= newGameBounds.y + newGameBounds.h
   ) {
     handleNewGame();
+    return;
+  }
+
+  // Tutorial "Continue" button
+  const contBounds = renderer.continueButtonBounds;
+  if (contBounds &&
+    e.clientX >= contBounds.x && e.clientX <= contBounds.x + contBounds.w &&
+    e.clientY >= contBounds.y && e.clientY <= contBounds.y + contBounds.h
+  ) {
+    endTutorial();
+    return;
   }
 });
 
@@ -231,15 +306,27 @@ function loop(now: number): void {
     if (!still) {
       // Snap arrived at target
       if (drag.snapTarget === 1.0) {
-        // Commit the move
         const direction = drag.direction!;
-        const oldNext = game.nextTile;
-        resetDrag(drag);
-        game.move(direction);
-        triggerSpawnOnly(game.lastMoveEvents, anim, direction);
-        triggerNextTileAnim(anim, oldNext, game.nextTile);
-        playMergeSounds();
-        if (game.status === 'ended') onGameOver();
+
+        if (tutorial) {
+          const oldNext = tutorial.nextTile;
+          resetDrag(drag);
+          tutorialMove(tutorial, direction);
+          triggerSpawnOnly(tutorial.lastMoveEvents, anim, direction);
+          if (tutorialShowNextTile(tutorial)) {
+            triggerNextTileAnim(anim, oldNext, tutorial.nextTile);
+          }
+          playMergeSoundsFromEvents(tutorial.lastMoveEvents);
+        } else {
+          // Commit the move
+          const oldNext = game.nextTile;
+          resetDrag(drag);
+          game.move(direction);
+          triggerSpawnOnly(game.lastMoveEvents, anim, direction);
+          triggerNextTileAnim(anim, oldNext, game.nextTile);
+          playMergeSoundsFromEvents(game.lastMoveEvents);
+          if (game.status === 'ended') onGameOver();
+        }
       } else {
         // Cancel — shake if the move was invalid
         const wasInvalid = drag.preview && !drag.preview.valid;
@@ -252,18 +339,40 @@ function loop(now: number): void {
   // Standard animations (slide/merge/spawn/shake)
   updateAnimations(anim, dt);
 
-  // Choose which grid to show: frozen snapshot during drag, live grid otherwise
-  const displayGrid = drag.gridSnapshot ?? game.grid;
+  // Choose which grid/state to render
+  if (tutorial) {
+    const displayGrid = drag.gridSnapshot ?? tutorial.grid;
+    const showNext = tutorialShowNextTile(tutorial);
+    const tutInfo: TutorialRenderInfo = {
+      headerText: tutorialHeader(tutorial),
+      showBorder: tutorialShowBorder(tutorial),
+      hideNextTile: !showNext,
+      showContinue: tutorialShowContinue(tutorial),
+    };
 
-  renderer.render(
-    displayGrid,
-    game.nextTile,
-    game.status === 'ended',
-    anim,
-    drag.phase === 'dragging' || drag.phase === 'snapping' ? drag : null,
-    gameOverData,
-    game.score,
-  );
+    renderer.render(
+      displayGrid,
+      tutorial.nextTile,
+      false, // never game over in tutorial
+      anim,
+      drag.phase === 'dragging' || drag.phase === 'snapping' ? drag : null,
+      null,
+      undefined,
+      tutInfo,
+    );
+  } else {
+    const displayGrid = drag.gridSnapshot ?? game.grid;
+
+    renderer.render(
+      displayGrid,
+      game.nextTile,
+      game.status === 'ended',
+      anim,
+      drag.phase === 'dragging' || drag.phase === 'snapping' ? drag : null,
+      gameOverData,
+      game.score,
+    );
+  }
 
   requestAnimationFrame(loop);
 }
