@@ -37,8 +37,8 @@ export class Renderer {
   private _boardY = 0;
   private _newGameBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
 
-  /** When true (default), color letter labels are shown on tiles. */
-  colorBlindMode = true;
+  /** When true, color letter labels are shown on tiles. */
+  colorBlindMode = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;

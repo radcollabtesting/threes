@@ -199,11 +199,18 @@ canvas.addEventListener('click', (e: MouseEvent) => {
   }
 });
 
-/* ── Color blind mode toggle ──────────────────────────── */
+/* ── Color blind mode toggle (persisted to localStorage) ── */
 
 const cbCheck = document.getElementById('cb-check') as HTMLInputElement;
+const storedCB = localStorage.getItem('colorBlindMode');
+if (storedCB !== null) {
+  const on = storedCB === '1';
+  cbCheck.checked = on;
+  renderer.colorBlindMode = on;
+}
 cbCheck.addEventListener('change', () => {
   renderer.colorBlindMode = cbCheck.checked;
+  localStorage.setItem('colorBlindMode', cbCheck.checked ? '1' : '0');
 });
 
 /* ── Resize ────────────────────────────────────────────── */
