@@ -173,13 +173,14 @@ export function mergeResult(a: CellValue, b: CellValue): CellValue {
   const ciA = tileColorIndex(a);
   const ciB = tileColorIndex(b);
 
-  // Check forward merge table
+  // Check forward merge table — dots carry (max of inputs)
   const fwd = FORWARD_MERGES.get(mergeKey(ciA, ciB));
   if (fwd !== undefined) {
-    return encodeTile(fwd, 0);
+    const carryDots = Math.max(tileDots(a), tileDots(b));
+    return encodeTile(fwd, carryDots);
   }
 
-  // Backward merge: secondary + parent → parent with +1 dot
+  // Backward merge: secondary + parent → parent with max(secDots, parentDots) + 1
   const backA = tryBackwardMerge(ciA, ciB, a, b);
   if (backA !== null) return backA;
   const backB = tryBackwardMerge(ciB, ciA, b, a);
@@ -191,14 +192,14 @@ export function mergeResult(a: CellValue, b: CellValue): CellValue {
 
 function tryBackwardMerge(
   secIdx: number, parentIdx: number,
-  _secTile: CellValue, parentTile: CellValue,
+  secTile: CellValue, parentTile: CellValue,
 ): CellValue | null {
   const parents = SECONDARY_PARENTS.get(secIdx);
   if (!parents) return null;
   if (!parents.includes(parentIdx)) return null;
-  // Secondary merges backward into its parent; parent gains a dot
-  const parentDots = tileDots(parentTile);
-  return encodeTile(parentIdx, parentDots + 1);
+  // Secondary merges backward into its parent; carry max dots + 1
+  const maxDots = Math.max(tileDots(secTile), tileDots(parentTile));
+  return encodeTile(parentIdx, maxDots + 1);
 }
 
 /** True if this merge was a backward merge (secondary + parent). */
@@ -207,9 +208,40 @@ export function isBackwardMerge(a: CellValue, b: CellValue): boolean {
   return isBackward(tileColorIndex(a), tileColorIndex(b));
 }
 
+/* ── Merge partners (for hint dots) ────────────────── */
+
+/** Returns color indices that this tile can merge with. */
+export function getMergePartners(id: CellValue): number[] {
+  if (id === 0) return [];
+  const ci = tileColorIndex(id);
+  const partners: number[] = [];
+  for (let other = 0; other < NUM_COLORS; other++) {
+    if (other === ci) continue;
+    if (FORWARD_MERGES.has(mergeKey(ci, other))) {
+      partners.push(other);
+    } else if (isBackward(ci, other)) {
+      partners.push(other);
+    }
+  }
+  return partners;
+}
+
 /* ── Base tile constants ─────────────────────────────── */
 
 export const CYAN = encodeTile(CYAN_IDX, 0);
 export const MAGENTA = encodeTile(MAGENTA_IDX, 0);
 export const YELLOW = encodeTile(YELLOW_IDX, 0);
 export const BASE_TILES: CellValue[] = [CYAN, MAGENTA, YELLOW];
+export const PRIMARY_TILES: CellValue[] = [
+  encodeTile(BLUE_IDX, 0),
+  encodeTile(RED_IDX, 0),
+  encodeTile(GREEN_IDX, 0),
+];
+export const SECONDARY_TILES: CellValue[] = [
+  encodeTile(ORANGE_IDX, 0),
+  encodeTile(VIOLET_IDX, 0),
+  encodeTile(CHARTREUSE_IDX, 0),
+  encodeTile(TEAL_IDX, 0),
+  encodeTile(TURQUOISE_IDX, 0),
+  encodeTile(INDIGO_IDX, 0),
+];

@@ -39,7 +39,7 @@ export class ThreesGame {
   private _score: number;
   private _moveCount: number;
   private _rng: () => number;
-  private _nextTileGen: () => CellValue;
+  private _nextTileGen: (grid: Grid) => CellValue;
   private _lastMoveEvents: MoveEvent[];
 
   constructor(configOverrides?: Partial<GameConfig>) {
@@ -151,18 +151,17 @@ export class ThreesGame {
     }
 
     // 4. Draw a new next tile
-    this._nextTile = this._nextTileGen();
+    this._nextTile = this._nextTileGen(this._grid);
 
-    // 5. Update score
+    // 5. Update score (never decreases)
     if (this.config.scoringEnabled) {
-      this._score = scoreGrid(this._grid);
+      this._score = Math.max(this._score, scoreGrid(this._grid));
     }
 
     // 6. Game-over check
     if (!hasAnyValidMove(this._grid)) {
       this._status = 'ended';
-      // Always compute final score on game over
-      this._score = scoreGrid(this._grid);
+      this._score = Math.max(this._score, scoreGrid(this._grid));
     }
 
     return true;
@@ -196,7 +195,7 @@ export class ThreesGame {
       this._nextTile = MAGENTA; // default fixture next tile
     } else {
       this._placeRandomStartTiles();
-      this._nextTile = this._nextTileGen();
+      this._nextTile = this._nextTileGen(this._grid);
     }
 
     if (this.config.scoringEnabled) {

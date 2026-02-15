@@ -9,7 +9,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   gridSize: 4,
   startTilesCount: 0, // 0 = random 3–5 (handled by game.ts)
   spawnOnlyOnChangedLine: true,
-  nextTileStrategy: 'bag', // balanced C/M/Y distribution
+  nextTileStrategy: 'progressive', // unlocks higher tiers as board progresses
   scoringEnabled: true, // color game always scores
   seed: 42,
   fixtureMode: false,

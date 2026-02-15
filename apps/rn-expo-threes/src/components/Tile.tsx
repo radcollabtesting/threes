@@ -8,7 +8,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SIZES } from '@threes/design-tokens';
-import { tileHex, tileTextColor, tileLabel, tileDots } from '@threes/game-logic';
+import { tileHex, tileTextColor, tileLabel, tileDots, getMergePartners, encodeTile } from '@threes/game-logic';
 
 interface TileProps {
   value: number;
@@ -67,6 +67,29 @@ export function Tile({ value, scale = 1 }: TileProps) {
           ))}
         </View>
       )}
+      {(() => {
+        const partners = getMergePartners(value);
+        if (partners.length === 0) return null;
+        return (
+          <View style={styles.hintsContainer}>
+            {partners.map((ci, i) => (
+              <View
+                key={ci}
+                style={[
+                  styles.hintDot,
+                  {
+                    backgroundColor: tileHex(encodeTile(ci, 0)),
+                    width: 5 * scale,
+                    height: 5 * scale,
+                    borderRadius: 2.5 * scale,
+                    marginLeft: i > 0 ? 2 * scale : 0,
+                  },
+                ]}
+              />
+            ))}
+          </View>
+        );
+      })()}
     </View>
   );
 }
@@ -88,4 +111,13 @@ const styles = StyleSheet.create({
   dot: {
     backgroundColor: '#FFFFFF',
   },
+  hintsContainer: {
+    position: 'absolute',
+    bottom: 4,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  hintDot: {},
 });

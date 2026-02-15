@@ -1,20 +1,26 @@
-import type { CellValue, NextTileStrategy } from './types';
+import type { CellValue, Grid, NextTileStrategy } from './types';
 import { shuffleArray } from '@threes/rng';
-import { CYAN, MAGENTA, YELLOW } from './color';
+import {
+  CYAN, MAGENTA, YELLOW,
+  BASE_TILES, PRIMARY_TILES, SECONDARY_TILES,
+  tileTier,
+} from './color';
 
 /**
  * Creates a next-tile generator based on the selected strategy.
  *
- * Both strategies only produce the three base color tiles (C, M, Y).
- * Merged colors are only created through player-driven merges.
+ * All generators accept a Grid parameter; bag and random ignore it,
+ * while progressive uses it to decide which tiers are unlocked.
  */
 export function createNextTileGenerator(
   strategy: NextTileStrategy,
   rng: () => number,
-): () => CellValue {
+): (grid: Grid) => CellValue {
   switch (strategy) {
     case 'bag':
       return createBagGenerator(rng);
+    case 'progressive':
+      return createProgressiveGenerator(rng);
     case 'random':
     default:
       return createRandomGenerator(rng);
@@ -27,7 +33,7 @@ export function createNextTileGenerator(
  *   Shuffle with seeded RNG on creation and on each refill.
  *   Pop one value per call.
  */
-function createBagGenerator(rng: () => number): () => CellValue {
+function createBagGenerator(rng: () => number): (grid: Grid) => CellValue {
   const BAG_TEMPLATE: CellValue[] = [
     CYAN, CYAN, CYAN, CYAN,
     MAGENTA, MAGENTA, MAGENTA, MAGENTA,
@@ -36,7 +42,7 @@ function createBagGenerator(rng: () => number): () => CellValue {
 
   let bag: CellValue[] = [];
 
-  return function nextFromBag(): CellValue {
+  return function nextFromBag(_grid: Grid): CellValue {
     if (bag.length === 0) {
       bag = shuffleArray(BAG_TEMPLATE, rng);
     }
@@ -48,9 +54,48 @@ function createBagGenerator(rng: () => number): () => CellValue {
  * RANDOM generator:
  *   Uniform random choice among {C, M, Y}.
  */
-function createRandomGenerator(rng: () => number): () => CellValue {
+function createRandomGenerator(rng: () => number): (grid: Grid) => CellValue {
   const VALUES: CellValue[] = [CYAN, MAGENTA, YELLOW];
-  return function nextRandom(): CellValue {
+  return function nextRandom(_grid: Grid): CellValue {
     return VALUES[Math.floor(rng() * VALUES.length)];
+  };
+}
+
+/**
+ * PROGRESSIVE generator:
+ *   Scans the board for highest tier present and unlocks accordingly.
+ *   - Always ≥50% chance of base (C, M, Y).
+ *   - If any primary on board: remaining chance includes primaries.
+ *   - If any secondary on board: remaining chance also includes secondaries.
+ *   Weights: 50% base, 25% primary (if unlocked), 25% secondary (if unlocked).
+ *   If only primary unlocked: 50% base, 50% primary.
+ *   Always consumes exactly 2 rng calls for determinism.
+ */
+function createProgressiveGenerator(rng: () => number): (grid: Grid) => CellValue {
+  return function nextProgressive(grid: Grid): CellValue {
+    let hasPrimary = false;
+    let hasSecondary = false;
+    for (const row of grid) {
+      for (const cell of row) {
+        if (cell === 0) continue;
+        const tier = tileTier(cell);
+        if (tier >= 1) hasPrimary = true;
+        if (tier >= 2) hasSecondary = true;
+      }
+    }
+
+    // Always consume two random numbers for determinism
+    const tierRoll = rng();
+    const tileRoll = rng();
+
+    if (!hasPrimary || tierRoll < 0.5) {
+      return BASE_TILES[Math.floor(tileRoll * BASE_TILES.length)];
+    }
+
+    if (!hasSecondary || tierRoll < 0.75) {
+      return PRIMARY_TILES[Math.floor(tileRoll * PRIMARY_TILES.length)];
+    }
+
+    return SECONDARY_TILES[Math.floor(tileRoll * SECONDARY_TILES.length)];
   };
 }

@@ -15,7 +15,7 @@ export type Grid = CellValue[][];
 export type GameStatus = 'playing' | 'ended';
 
 /** Strategy for generating the "next tile" value shown in the preview */
-export type NextTileStrategy = 'bag' | 'random';
+export type NextTileStrategy = 'bag' | 'random' | 'progressive';
 
 /* ── Configuration ─────────────────────────────────────── */
 

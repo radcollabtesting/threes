@@ -1,6 +1,7 @@
 import { ThreesGame } from '../game';
 import {
-  CYAN, MAGENTA, YELLOW, BASE_TILES, mergeResult, tileColorIndex,
+  CYAN, MAGENTA, YELLOW, BASE_TILES,
+  mergeResult, tileColorIndex,
   GREEN_IDX,
 } from '../color';
 
@@ -137,6 +138,45 @@ describe('ThreesGame', () => {
       expect(game.nextTile).toBe(initialNext);
       expect(game.moveCount).toBe(0);
       expect(game.status).toBe('playing');
+    });
+  });
+
+  describe('score never decreases', () => {
+    test('score is monotonically non-decreasing over moves', () => {
+      const game = new ThreesGame({ seed: 42 });
+      let prevScore = game.score;
+      const dirs = ['up', 'left', 'down', 'right'] as const;
+      for (let i = 0; i < 40; i++) {
+        game.move(dirs[i % dirs.length]);
+        expect(game.score).toBeGreaterThanOrEqual(prevScore);
+        prevScore = game.score;
+      }
+    });
+  });
+
+  describe('progressive spawning', () => {
+    test('default strategy is progressive', () => {
+      const game = new ThreesGame({ seed: 1 });
+      // With only base tiles on board, nextTile should be a base tile
+      expect(BASE_TILES).toContain(game.nextTile);
+    });
+
+    test('initial board only produces base tiles', () => {
+      // Run many generations — all should be base
+      const game = new ThreesGame({ seed: 100 });
+      const dirs = ['up', 'left', 'down', 'right'] as const;
+      for (let i = 0; i < 5; i++) {
+        const nt = game.nextTile;
+        expect(BASE_TILES).toContain(nt);
+        game.move(dirs[i % dirs.length]);
+      }
+    });
+
+    test('bag strategy still works when explicitly set', () => {
+      const game = new ThreesGame({ seed: 42, nextTileStrategy: 'bag' });
+      expect(BASE_TILES).toContain(game.nextTile);
+      game.move('up');
+      expect(BASE_TILES).toContain(game.nextTile);
     });
   });
 });

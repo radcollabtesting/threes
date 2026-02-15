@@ -9,10 +9,13 @@ import {
   canMerge,
   mergeResult,
   isBackwardMerge,
+  getMergePartners,
   CYAN,
   MAGENTA,
   YELLOW,
   BASE_TILES,
+  PRIMARY_TILES,
+  SECONDARY_TILES,
   CYAN_IDX,
   MAGENTA_IDX,
   YELLOW_IDX,
@@ -25,6 +28,7 @@ import {
   TEAL_IDX,
   TURQUOISE_IDX,
   INDIGO_IDX,
+  NUM_COLORS,
 } from '../color';
 
 describe('encoding / decoding', () => {
@@ -310,5 +314,120 @@ describe('tileLabel', () => {
   test('dotted tiles still show label', () => {
     const r2 = encodeTile(RED_IDX, 2);
     expect(tileLabel(r2)).toBe('R');
+  });
+});
+
+describe('forward merges carry dots', () => {
+  test('dotted primary + base → secondary carries dots', () => {
+    const R1 = encodeTile(RED_IDX, 1);
+    const result = mergeResult(R1, YELLOW);
+    expect(tileColorIndex(result)).toBe(ORANGE_IDX);
+    expect(tileDots(result)).toBe(1);
+  });
+
+  test('two dotted tiles → result gets max dots', () => {
+    const R2 = encodeTile(RED_IDX, 2);
+    const Y1 = encodeTile(YELLOW_IDX, 1);
+    const result = mergeResult(R2, Y1);
+    expect(tileColorIndex(result)).toBe(ORANGE_IDX);
+    expect(tileDots(result)).toBe(2);
+  });
+
+  test('base + base with 0 dots → secondary with 0 dots', () => {
+    const result = mergeResult(CYAN, MAGENTA);
+    expect(tileColorIndex(result)).toBe(BLUE_IDX);
+    expect(tileDots(result)).toBe(0);
+  });
+});
+
+describe('backward merges carry max dots', () => {
+  test('dotted secondary + undotted parent → max(sec,parent) + 1', () => {
+    const O1 = encodeTile(ORANGE_IDX, 1);
+    const R0 = encodeTile(RED_IDX, 0);
+    const result = mergeResult(O1, R0);
+    expect(tileColorIndex(result)).toBe(RED_IDX);
+    expect(tileDots(result)).toBe(2); // max(1,0)+1
+  });
+
+  test('undotted secondary + dotted parent → max(sec,parent) + 1', () => {
+    const O0 = encodeTile(ORANGE_IDX, 0);
+    const R2 = encodeTile(RED_IDX, 2);
+    const result = mergeResult(O0, R2);
+    expect(tileColorIndex(result)).toBe(RED_IDX);
+    expect(tileDots(result)).toBe(3); // max(0,2)+1
+  });
+
+  test('full cycle: base→primary→secondary→primary→secondary accumulates dots', () => {
+    // R(0) + Y(0) → O(0)
+    const O0 = mergeResult(encodeTile(RED_IDX, 0), YELLOW);
+    expect(tileColorIndex(O0)).toBe(ORANGE_IDX);
+    expect(tileDots(O0)).toBe(0);
+
+    // O(0) + R(0) → R(1)
+    const R1 = mergeResult(O0, encodeTile(RED_IDX, 0));
+    expect(tileColorIndex(R1)).toBe(RED_IDX);
+    expect(tileDots(R1)).toBe(1);
+
+    // R(1) + Y(0) → O(1) — dots carry!
+    const O1 = mergeResult(R1, YELLOW);
+    expect(tileColorIndex(O1)).toBe(ORANGE_IDX);
+    expect(tileDots(O1)).toBe(1);
+
+    // O(1) + R(0) → R(2) — max(1,0)+1
+    const R2 = mergeResult(O1, encodeTile(RED_IDX, 0));
+    expect(tileColorIndex(R2)).toBe(RED_IDX);
+    expect(tileDots(R2)).toBe(2);
+
+    // R(2) + Y(0) → O(2) — dots carry!
+    const O2 = mergeResult(R2, YELLOW);
+    expect(tileColorIndex(O2)).toBe(ORANGE_IDX);
+    expect(tileDots(O2)).toBe(2);
+  });
+});
+
+describe('getMergePartners', () => {
+  test('empty cell has no partners', () => {
+    expect(getMergePartners(0)).toEqual([]);
+  });
+
+  test('base color Cyan has 6 partners', () => {
+    const partners = getMergePartners(CYAN);
+    expect(partners).toContain(MAGENTA_IDX);   // forward C+M → Blue
+    expect(partners).toContain(YELLOW_IDX);    // forward Y+C → Green
+    expect(partners).toContain(BLUE_IDX);      // forward B+C → Turquoise
+    expect(partners).toContain(GREEN_IDX);     // forward G+C → Teal
+    expect(partners).toContain(TEAL_IDX);      // backward
+    expect(partners).toContain(TURQUOISE_IDX); // backward
+    expect(partners).toHaveLength(6);
+  });
+
+  test('secondary Orange has 2 partners (its parents)', () => {
+    const O = encodeTile(ORANGE_IDX, 0);
+    const partners = getMergePartners(O);
+    expect(partners).toContain(RED_IDX);
+    expect(partners).toContain(YELLOW_IDX);
+    expect(partners).toHaveLength(2);
+  });
+
+  test('dotted tiles have same partners as undotted', () => {
+    const R0 = encodeTile(RED_IDX, 0);
+    const R3 = encodeTile(RED_IDX, 3);
+    expect(getMergePartners(R0)).toEqual(getMergePartners(R3));
+  });
+});
+
+describe('tile arrays', () => {
+  test('PRIMARY_TILES has 3 elements', () => {
+    expect(PRIMARY_TILES).toHaveLength(3);
+    for (const t of PRIMARY_TILES) {
+      expect(tileTier(t)).toBe(1);
+    }
+  });
+
+  test('SECONDARY_TILES has 6 elements', () => {
+    expect(SECONDARY_TILES).toHaveLength(6);
+    for (const t of SECONDARY_TILES) {
+      expect(tileTier(t)).toBe(2);
+    }
   });
 });
