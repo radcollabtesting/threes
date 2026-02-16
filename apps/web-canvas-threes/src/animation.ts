@@ -42,12 +42,28 @@ export interface NextTileAnim {
   newValue: number;
 }
 
+export interface RippleAnim {
+  row: number;
+  col: number;
+  progress: number; // 0 → 1
+  color: string;    // result tile color
+}
+
+export interface MixSlideAnim {
+  src1Row: number; src1Col: number; src1Value: number;
+  src2Row: number; src2Col: number; src2Value: number;
+  targetRow: number; targetCol: number;
+  progress: number; // 0 → 1
+}
+
 export interface AnimState {
   slides: Map<string, SlideAnim>;
   merges: Map<string, MergeAnim>;
   spawns: Map<string, SpawnAnim>;
   shake: { progress: number; active: boolean };
   nextTile: NextTileAnim;
+  ripple: RippleAnim | null;
+  mixSlide: MixSlideAnim | null;
 }
 
 /* ── Factory ───────────────────────────────────────────── */
@@ -59,6 +75,8 @@ export function createAnimState(): AnimState {
     spawns: new Map(),
     shake: { progress: 1, active: false },
     nextTile: { active: false, progress: 1, oldValue: 0, newValue: 0 },
+    ripple: null,
+    mixSlide: null,
   };
 }
 
@@ -145,6 +163,32 @@ export function triggerNextTileAnim(anim: AnimState, oldValue: number, newValue:
   anim.nextTile = { active: true, progress: 0, oldValue, newValue };
 }
 
+/** Duration for the catalyst mix ripple effect (ms) */
+const RIPPLE_DURATION = 400;
+
+/** Duration for the catalyst mix slide-in effect (ms) */
+const MIX_SLIDE_DURATION = 200;
+
+/** Triggers a ripple animation at the given grid position (catalyst mix). */
+export function triggerRipple(anim: AnimState, row: number, col: number, color: string): void {
+  anim.ripple = { row, col, progress: 0, color };
+}
+
+/** Triggers the mix slide animation (source tiles slide into gray target). */
+export function triggerMixSlide(
+  anim: AnimState,
+  src1Row: number, src1Col: number, src1Value: number,
+  src2Row: number, src2Col: number, src2Value: number,
+  targetRow: number, targetCol: number,
+): void {
+  anim.mixSlide = {
+    src1Row, src1Col, src1Value,
+    src2Row, src2Col, src2Value,
+    targetRow, targetCol,
+    progress: 0,
+  };
+}
+
 /** Triggers the invalid-move shake. Respects prefers-reduced-motion. */
 export function triggerShake(anim: AnimState): void {
   if (typeof window !== 'undefined' &&
@@ -209,6 +253,19 @@ export function updateAnimations(anim: AnimState, dt: number): boolean {
   if (anim.shake.active && anim.shake.progress < 1) {
     anim.shake.progress = Math.min(1, anim.shake.progress + dt / ANIMATION.shakeDuration);
     active = true;
+  }
+
+  // Mix slide (catalyst mix source tiles sliding into gray)
+  if (anim.mixSlide && anim.mixSlide.progress < 1) {
+    anim.mixSlide.progress = Math.min(1, anim.mixSlide.progress + dt / MIX_SLIDE_DURATION);
+    active = true;
+  }
+
+  // Ripple (catalyst mix)
+  if (anim.ripple && anim.ripple.progress < 1) {
+    anim.ripple.progress = Math.min(1, anim.ripple.progress + dt / RIPPLE_DURATION);
+    active = true;
+    if (anim.ripple.progress >= 1) anim.ripple = null;
   }
 
   return active;

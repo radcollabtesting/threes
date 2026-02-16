@@ -33,3 +33,19 @@ export function scoreGrid(grid: Grid): number {
   }
   return total;
 }
+
+/** Computes total score with catalyst mix multipliers applied */
+export function scoreGridWithMultipliers(grid: Grid, multipliers: number[][]): number {
+  let total = 0;
+  for (let r = 0; r < grid.length; r++) {
+    for (let c = 0; c < grid[r].length; c++) {
+      const cell = grid[r][c];
+      if (cell > 0) {
+        const base = scoreTile(cell);
+        const mult = multipliers[r]?.[c] ?? 0;
+        total += mult > 0 ? base * mult : base;
+      }
+    }
+  }
+  return total;
+}

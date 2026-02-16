@@ -5,7 +5,7 @@ export { applyMove, isValidMove, hasAnyValidMove, directionDelta } from './move'
 export { canMerge, mergeResult } from './merge';
 export { selectSpawnPosition, getSpawnEdgeCells } from './spawn';
 export { createNextTileGenerator } from './next-tile';
-export { scoreTile, scoreGrid } from './score';
+export { scoreTile, scoreGrid, scoreGridWithMultipliers } from './score';
 export {
   createEmptyGrid,
   cloneGrid,
@@ -15,6 +15,15 @@ export {
   gridToString,
 } from './board';
 export { DEFAULT_CONFIG, resolveConfig } from './config';
+export {
+  catalystMixColorResult,
+  getValidMixTargets,
+  canCatalystMix,
+  applyCatalystMix,
+  hasValidCatalystMix,
+  grayHasValidMix,
+  getAdjacentPositions,
+} from './catalyst-mix';
 
 export {
   encodeTile,
@@ -47,6 +56,7 @@ export {
   TURQUOISE_IDX,
   INDIGO_IDX,
   GRAY_IDX,
+  BROWN_IDX,
   NUM_COLORS,
 } from './color';
 

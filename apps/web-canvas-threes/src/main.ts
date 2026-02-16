@@ -11,7 +11,7 @@
  * Touch/mouse: drag to preview, release past 50% to commit.
  */
 
-import { ThreesGame, cloneGrid, scoreGrid, type Direction, type MoveEvent } from '@threes/game-logic';
+import { ThreesGame, cloneGrid, scoreGridWithMultipliers, tileHex, type Direction, type MoveEvent } from '@threes/game-logic';
 import { Renderer } from './renderer';
 import type { GameOverData, TutorialRenderInfo } from './renderer';
 import {
@@ -20,9 +20,19 @@ import {
   triggerSpawnOnly,
   triggerNextTileAnim,
   triggerShake,
+  triggerRipple,
+  triggerMixSlide,
   updateAnimations,
   type AnimState,
 } from './animation';
+import {
+  createMixState,
+  startMix,
+  mixSelectTile,
+  confirmMix,
+  cancelMix,
+  type MixState,
+} from './mix-state';
 import { setupInput, resolveSwipe, type InputCallbacks } from './input';
 import {
   createDragState,
@@ -64,9 +74,11 @@ const drag: DragState = createDragState();
 let game = new ThreesGame({ seed, fixtureMode, nextTileStrategy, scoringEnabled });
 let gameOverData: GameOverData | null = null;
 let tutorial: TutorialState | null = null;
+const mixState: MixState = createMixState();
+let multiplierSnapshot: number[][] | null = null;
 
 function onGameOver(): void {
-  const finalScore = scoreGrid(game.grid);
+  const finalScore = scoreGridWithMultipliers(game.grid, game.multipliers);
   const { scores, newIndex } = saveScore(finalScore);
   // Sort scores descending; track the current game's entry by reference
   const currentEntry = scores[newIndex];
@@ -92,6 +104,7 @@ const tutorialBtn = document.getElementById('tutorial-btn') as HTMLButtonElement
 function startTutorial(): void {
   tutorial = createTutorialState();
   resetDrag(drag);
+  cancelMix(mixState);
   gameOverData = null;
   tutorialBtn.style.display = 'none';
 }
@@ -119,6 +132,8 @@ if (!localStorage.getItem('tutorialComplete')) {
  */
 function handleInstantMove(direction: Direction): void {
   if (drag.phase !== 'idle') return;
+  if (mixState.phase !== 'idle') return; // block moves during mix selection
+  if (anim.mixSlide) return; // block during mix animation
 
   if (tutorial) {
     const oldNext = tutorial.nextTile;
@@ -153,6 +168,7 @@ function handleNewGame(): void {
   if (tutorial) return; // ignore R key during tutorial
   game.restart();
   resetDrag(drag);
+  cancelMix(mixState);
   gameOverData = null;
 }
 
@@ -161,6 +177,8 @@ function handleNewGame(): void {
  */
 function handleDragStart(x: number, y: number): void {
   if (drag.phase !== 'idle') return;
+  if (mixState.phase !== 'idle') return; // block drag during mix selection
+  if (anim.mixSlide) return; // block during mix animation
 
   if (tutorial) {
     drag.phase = 'pending';
@@ -180,6 +198,7 @@ function handleDragStart(x: number, y: number): void {
   drag.currentX = x;
   drag.currentY = y;
   drag.gridSnapshot = cloneGrid(game.grid);
+  multiplierSnapshot = game.multipliers;
 }
 
 /**
@@ -246,6 +265,7 @@ const inputCallbacks: InputCallbacks = {
   onDragStart: handleDragStart,
   onDragMove: handleDragMove,
   onDragEnd: handleDragEnd,
+  onEscape: () => cancelMix(mixState),
 };
 
 setupInput(canvas, inputCallbacks);
@@ -271,6 +291,71 @@ canvas.addEventListener('click', (e: MouseEvent) => {
   ) {
     endTutorial();
     return;
+  }
+
+  // Mix mode interactions (not during tutorial or game over)
+  if (!tutorial && game.status !== 'ended') {
+    // If in mix selection/preview mode, handle interactions
+    if (mixState.phase !== 'idle') {
+      // Check Confirm button (preview phase)
+      const confirmBounds = renderer.confirmButtonBounds;
+      if (confirmBounds &&
+        e.clientX >= confirmBounds.x && e.clientX <= confirmBounds.x + confirmBounds.w &&
+        e.clientY >= confirmBounds.y && e.clientY <= confirmBounds.y + confirmBounds.h
+      ) {
+        const mixData = confirmMix(mixState);
+        if (mixData) {
+          // Capture source tile values before the mix changes the grid
+          const gridSnap = game.grid;
+          const src1Val = gridSnap[mixData.src1.row][mixData.src1.col];
+          const src2Val = gridSnap[mixData.src2.row][mixData.src2.col];
+
+          const success = game.catalystMix(mixData.grayPos, mixData.src1, mixData.src2);
+          if (success) {
+            triggerMixSlide(anim,
+              mixData.src1.row, mixData.src1.col, src1Val,
+              mixData.src2.row, mixData.src2.col, src2Val,
+              mixData.grayPos.row, mixData.grayPos.col,
+            );
+            playMergeSound(3);
+          }
+        }
+        return;
+      }
+
+      // Check Cancel button (preview phase)
+      const cancelBounds = renderer.cancelButtonBounds;
+      if (cancelBounds &&
+        e.clientX >= cancelBounds.x && e.clientX <= cancelBounds.x + cancelBounds.w &&
+        e.clientY >= cancelBounds.y && e.clientY <= cancelBounds.y + cancelBounds.h
+      ) {
+        cancelMix(mixState);
+        return;
+      }
+
+      // During preview phase, clicks on the board cancel
+      if (mixState.phase === 'previewing') {
+        cancelMix(mixState);
+        return;
+      }
+
+      // During selection phases, handle tile taps
+      const tilePos = renderer.hitTestGrid(e.clientX, e.clientY);
+      if (tilePos) {
+        mixSelectTile(mixState, game.grid, tilePos);
+      } else {
+        // Tapped outside the grid — cancel mix mode
+        cancelMix(mixState);
+      }
+      return;
+    }
+
+    // Check for Mix button tap (enters mix mode)
+    const mixBtnPos = renderer.hitTestMixButton(e.clientX, e.clientY);
+    if (mixBtnPos && !anim.mixSlide) {
+      startMix(mixState, game.grid, mixBtnPos);
+      return;
+    }
   }
 });
 
@@ -339,6 +424,15 @@ function loop(now: number): void {
   // Standard animations (slide/merge/spawn/shake)
   updateAnimations(anim, dt);
 
+  // Mix slide completed → trigger ripple + merge pop
+  if (anim.mixSlide && anim.mixSlide.progress >= 1) {
+    const ms = anim.mixSlide;
+    const resultVal = game.grid[ms.targetRow][ms.targetCol];
+    triggerRipple(anim, ms.targetRow, ms.targetCol, tileHex(resultVal));
+    anim.merges.set(`${ms.targetRow},${ms.targetCol}`, { value: resultVal, progress: 0 });
+    anim.mixSlide = null;
+  }
+
   // Choose which grid/state to render
   if (tutorial) {
     const displayGrid = drag.gridSnapshot ?? tutorial.grid;
@@ -362,6 +456,7 @@ function loop(now: number): void {
     );
   } else {
     const displayGrid = drag.gridSnapshot ?? game.grid;
+    const displayMult = drag.gridSnapshot ? multiplierSnapshot : game.multipliers;
 
     renderer.render(
       displayGrid,
@@ -371,6 +466,9 @@ function loop(now: number): void {
       drag.phase === 'dragging' || drag.phase === 'snapping' ? drag : null,
       gameOverData,
       game.score,
+      null,
+      mixState,
+      displayMult,
     );
   }
 

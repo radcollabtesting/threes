@@ -37,7 +37,8 @@ export const TEAL_IDX = 9;
 export const TURQUOISE_IDX = 10;
 export const INDIGO_IDX = 11;
 export const GRAY_IDX = 12;
-export const NUM_COLORS = 13;
+export const BROWN_IDX = 13;
+export const NUM_COLORS = 14;
 
 /* ── Encoding / Decoding ──────────────────────────────── */
 
@@ -58,7 +59,7 @@ export function tileDots(id: CellValue): number {
 const BASE_INDICES = new Set([CYAN_IDX, MAGENTA_IDX, YELLOW_IDX]);
 const PRIMARY_INDICES = new Set([BLUE_IDX, RED_IDX, GREEN_IDX]);
 const SECONDARY_INDICES = new Set([
-  ORANGE_IDX, VIOLET_IDX, INDIGO_IDX, TEAL_IDX,
+  ORANGE_IDX, VIOLET_IDX, INDIGO_IDX, TEAL_IDX, BROWN_IDX,
 ]);
 const TERTIARY_INDICES = new Set([GRAY_IDX]);
 
@@ -100,7 +101,7 @@ HEX_MAP[YELLOW_IDX] = '#ffd654';
 HEX_MAP[BLUE_IDX] = '#5476ff';
 HEX_MAP[RED_IDX] = '#ff5468';
 HEX_MAP[GREEN_IDX] = '#68ff54';
-HEX_MAP[ORANGE_IDX] = '#ffa854';
+HEX_MAP[ORANGE_IDX] = '#e87830';
 HEX_MAP[VIOLET_IDX] = '#b454ff';
 HEX_MAP[CHARTREUSE_IDX] = '#c8ff54';
 HEX_MAP[TEAL_IDX] = '#2db890';
@@ -108,6 +109,7 @@ HEX_MAP[TURQUOISE_IDX] = '#54b4ff';
 HEX_MAP[INDIGO_IDX] = '#8054ff';
 // Gray uses a dynamic scale — see grayHex() below.
 // HEX_MAP[GRAY_IDX] is intentionally left unset.
+HEX_MAP[BROWN_IDX] = '#A0522D';
 
 /**
  * Returns a gray hex that darkens with each merge.
@@ -174,6 +176,7 @@ const MERGE_MAP: Record<number, number> = {
   [TEAL_IDX]: GRAY_IDX,        // T+T → Gray
   [TURQUOISE_IDX]: GRAY_IDX,   // Tu+Tu → Gray
   [INDIGO_IDX]: GRAY_IDX,      // I+I → Gray
+  [BROWN_IDX]: GRAY_IDX,       // Br+Br → Gray
 };
 
 /* ── Merge logic ─────────────────────────────────────── */
