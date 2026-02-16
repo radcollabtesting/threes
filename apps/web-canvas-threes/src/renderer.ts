@@ -364,7 +364,7 @@ export class Renderer {
     }
 
     // ── Next tile preview ─────────────────────────────────
-    const hideNextTile = tutorialInfo?.hideNextTile ?? false;
+    const hideNextTile = (tutorialInfo?.hideNextTile ?? false) || mixActive;
 
     if (!hideNextTile) {
       const nextY = by + BOARD.height * s + SIZES.nextTileGapFromBoard * s;
