@@ -1094,25 +1094,25 @@ export class Renderer {
 
         const hasValidMix = grayHasValidMix(grid, { row: r, col: c });
 
-        // Position Mix button at bottom center of tile
+        // Position Mix button centered on tile
         const tileX = bx + c * (tw + gx);
         const tileY = by + r * (th + gy);
         const btnW = 36 * s;
         const btnH = 18 * s;
         const btnX = tileX + (tw - btnW) / 2;
-        const btnY = tileY + th - btnH - 6 * s;
+        const btnY = tileY + (th - btnH) / 2;
         const btnR = btnH / 2;
 
         // Pill background (faded when disabled)
         ctx.save();
         ctx.globalAlpha = hasValidMix ? 0.9 : 0.3;
-        this.roundRect(btnX, btnY, btnW, btnH, btnR, '#FFFFFF');
+        this.roundRect(btnX, btnY, btnW, btnH, btnR, '#000000');
         ctx.restore();
 
         // "Mix" text (faded when disabled)
         ctx.save();
         ctx.globalAlpha = hasValidMix ? 1 : 0.4;
-        ctx.fillStyle = '#000000';
+        ctx.fillStyle = '#FFFFFF';
         ctx.font = `bold ${10 * s}px ${font}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';

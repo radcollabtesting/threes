@@ -113,18 +113,13 @@ HEX_MAP[BROWN_IDX] = '#A0522D';
 
 /**
  * Returns a gray hex that lightens with each merge.
- * Starts dark (#404040) and steps up toward white (#F0F0F0).
- *   dots 0 → dark gray (#404040)
- *   dots 1 → light gray (#989898)
- *   dots 2+ → white (#F0F0F0)
+ *   dots 0 → dark gray  (#616161)
+ *   dots 1 → mid gray   (#b1b1b1)
+ *   dots 2+ → white     (#FFFFFF)
  */
+const GRAY_STEPS = ['#616161', '#b1b1b1', '#FFFFFF'];
 function grayHex(dots: number): string {
-  const start = 0x40; //  64 — dark gray
-  const ceil  = 0xF0; // 240 — near white
-  const step  = 88;
-  const v = Math.min(ceil, start + dots * step);
-  const h = v.toString(16).padStart(2, '0');
-  return `#${h}${h}${h}`;
+  return GRAY_STEPS[Math.min(dots, GRAY_STEPS.length - 1)];
 }
 
 export function tileHex(id: CellValue): string {
@@ -157,11 +152,17 @@ LABEL_MAP[ORANGE_IDX] = 'O';
 LABEL_MAP[VIOLET_IDX] = 'V';
 LABEL_MAP[INDIGO_IDX] = 'I';
 LABEL_MAP[TEAL_IDX] = 'T';
+LABEL_MAP[BROWN_IDX] = 'Br';
 
-/** Returns single-letter label for named colors, null otherwise. */
+/** Gray labels by dots: dark → mid → (white has no label, shows Mix instead). */
+const GRAY_LABEL = ['Dk', 'Md'];
+
+/** Returns short label for named colors, null otherwise. */
 export function tileLabel(id: CellValue): string | null {
   if (id === 0) return null;
-  return LABEL_MAP[tileColorIndex(id)] ?? null;
+  const ci = tileColorIndex(id);
+  if (ci === GRAY_IDX) return GRAY_LABEL[tileDots(id)] ?? null;
+  return LABEL_MAP[ci] ?? null;
 }
 
 /* ── Deterministic merge map: color → result color ──── */
