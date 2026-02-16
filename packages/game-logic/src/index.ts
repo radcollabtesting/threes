@@ -21,6 +21,7 @@ export {
   canCatalystMix,
   applyCatalystMix,
   hasValidCatalystMix,
+  grayHasValidMix,
   getAdjacentPositions,
 } from './catalyst-mix';
 

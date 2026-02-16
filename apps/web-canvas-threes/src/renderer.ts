@@ -5,7 +5,7 @@
  * Tile colors are computed dynamically from the color encoding system.
  */
 
-import { scoreTile, tileHex, tileTextColor, tileLabel, tileDisplayDots, getMergePartners, encodeTile, canMerge, tileColorIndex, mergeResult, GRAY_IDX, type CellValue, type Grid, type Direction, type Position } from '@threes/game-logic';
+import { scoreTile, tileHex, tileTextColor, tileLabel, tileDisplayDots, getMergePartners, encodeTile, canMerge, tileColorIndex, mergeResult, GRAY_IDX, grayHasValidMix, type CellValue, type Grid, type Direction, type Position } from '@threes/game-logic';
 import { COLORS, SIZES, BOARD, ANIMATION, BUTTON, SCORE_LIST } from '@threes/design-tokens';
 import type { AnimState } from './animation';
 import type { DragState, TilePreview } from './drag';
@@ -47,6 +47,8 @@ export class Renderer {
   private _continueBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
   /** Mix button bounds keyed by "row,col" */
   private _mixBtnBounds: Map<string, { x: number; y: number; w: number; h: number }> = new Map();
+  private _confirmBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
+  private _cancelBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
 
   /** When true, color letter labels are shown on tiles. */
   colorBlindMode = false;
@@ -75,6 +77,16 @@ export class Renderer {
   /** Returns mix button bounds map for hit testing */
   get mixButtonBounds(): Map<string, { x: number; y: number; w: number; h: number }> {
     return this._mixBtnBounds;
+  }
+
+  /** Returns the confirm button bounds in CSS px, or null if not rendered. */
+  get confirmButtonBounds(): { x: number; y: number; w: number; h: number } | null {
+    return this._confirmBtnBounds;
+  }
+
+  /** Returns the cancel button bounds in CSS px, or null if not rendered. */
+  get cancelButtonBounds(): { x: number; y: number; w: number; h: number } | null {
+    return this._cancelBtnBounds;
   }
 
   /**
@@ -246,6 +258,8 @@ export class Renderer {
 
     // ── Mix mode UI ──────────────────────────────────────
     this._mixBtnBounds.clear();
+    this._confirmBtnBounds = null;
+    this._cancelBtnBounds = null;
     const mixActive = mixState && mixState.phase !== 'idle';
 
     if (!isDragActive && !gameOver && !tutorialInfo) {
@@ -262,57 +276,58 @@ export class Renderer {
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
         ctx.fillRect(bx, by, BOARD.width * s, BOARD.height * s);
 
-        // Highlight Gray tile with pulsing border
-        if (mixState.grayPos) {
+        if (mixState.phase === 'previewing' && mixState.grayPos && mixState.previewResultValue !== null) {
+          // ── Preview mode: show result on Gray, dim sources ──
+          // Draw result tile at Gray position
           const gx2 = bx + mixState.grayPos.col * (tw + gx);
           const gy2 = by + mixState.grayPos.row * (th + gy);
-          this.drawTile(gx2, gy2, tw, th, br, s, grid[mixState.grayPos.row][mixState.grayPos.col], 1, 0.6);
-        }
+          this.drawTile(gx2, gy2, tw, th, br, s, mixState.previewResultValue, 1, 1);
+          // Green border on result preview
+          this.drawSelectionBorder(gx2, gy2, tw, th, br, s, '#00FF88');
 
-        // Highlight first selected tile
-        if (mixState.firstSelection) {
-          const fx = bx + mixState.firstSelection.col * (tw + gx);
-          const fy = by + mixState.firstSelection.row * (th + gy);
-          const fv = grid[mixState.firstSelection.row][mixState.firstSelection.col];
-          this.drawTile(fx, fy, tw, th, br, s, fv, 1, 1);
-          // Green selection border
-          ctx.strokeStyle = '#00FF88';
-          ctx.lineWidth = 3 * s;
-          ctx.beginPath();
-          ctx.moveTo(fx + br, fy);
-          ctx.lineTo(fx + tw - br, fy);
-          ctx.quadraticCurveTo(fx + tw, fy, fx + tw, fy + br);
-          ctx.lineTo(fx + tw, fy + th - br);
-          ctx.quadraticCurveTo(fx + tw, fy + th, fx + tw - br, fy + th);
-          ctx.lineTo(fx + br, fy + th);
-          ctx.quadraticCurveTo(fx, fy + th, fx, fy + th - br);
-          ctx.lineTo(fx, fy + br);
-          ctx.quadraticCurveTo(fx, fy, fx + br, fy);
-          ctx.closePath();
-          ctx.stroke();
-        }
+          // Dim source tiles (show them faded to indicate they'll be consumed)
+          if (mixState.firstSelection) {
+            const fx = bx + mixState.firstSelection.col * (tw + gx);
+            const fy = by + mixState.firstSelection.row * (th + gy);
+            const fv = grid[mixState.firstSelection.row][mixState.firstSelection.col];
+            this.drawTile(fx, fy, tw, th, br, s, fv, 1, 0.4);
+          }
+          if (mixState.secondSelection) {
+            const sx = bx + mixState.secondSelection.col * (tw + gx);
+            const sy = by + mixState.secondSelection.row * (th + gy);
+            const sv = grid[mixState.secondSelection.row][mixState.secondSelection.col];
+            this.drawTile(sx, sy, tw, th, br, s, sv, 1, 0.4);
+          }
 
-        // Highlight valid targets with glowing border
-        for (const target of mixState.validTargets) {
-          const tx2 = bx + target.col * (tw + gx);
-          const ty2 = by + target.row * (th + gy);
-          const tv = grid[target.row][target.col];
-          this.drawTile(tx2, ty2, tw, th, br, s, tv, 1, 1);
-          // White pulsing border for valid targets
-          ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-          ctx.lineWidth = 2 * s;
-          ctx.beginPath();
-          ctx.moveTo(tx2 + br, ty2);
-          ctx.lineTo(tx2 + tw - br, ty2);
-          ctx.quadraticCurveTo(tx2 + tw, ty2, tx2 + tw, ty2 + br);
-          ctx.lineTo(tx2 + tw, ty2 + th - br);
-          ctx.quadraticCurveTo(tx2 + tw, ty2 + th, tx2 + tw - br, ty2 + th);
-          ctx.lineTo(tx2 + br, ty2 + th);
-          ctx.quadraticCurveTo(tx2, ty2 + th, tx2, ty2 + th - br);
-          ctx.lineTo(tx2, ty2 + br);
-          ctx.quadraticCurveTo(tx2, ty2, tx2 + br, ty2);
-          ctx.closePath();
-          ctx.stroke();
+          // ── Confirm / Cancel buttons below the board ──
+          this.drawConfirmCancelButtons(vw, by, s);
+
+        } else {
+          // ── Selection mode (selectingFirst / selectingSecond) ──
+          // Highlight Gray tile
+          if (mixState.grayPos) {
+            const gx2 = bx + mixState.grayPos.col * (tw + gx);
+            const gy2 = by + mixState.grayPos.row * (th + gy);
+            this.drawTile(gx2, gy2, tw, th, br, s, grid[mixState.grayPos.row][mixState.grayPos.col], 1, 0.6);
+          }
+
+          // Highlight first selected tile
+          if (mixState.firstSelection) {
+            const fx = bx + mixState.firstSelection.col * (tw + gx);
+            const fy = by + mixState.firstSelection.row * (th + gy);
+            const fv = grid[mixState.firstSelection.row][mixState.firstSelection.col];
+            this.drawTile(fx, fy, tw, th, br, s, fv, 1, 1);
+            this.drawSelectionBorder(fx, fy, tw, th, br, s, '#00FF88');
+          }
+
+          // Highlight valid targets with glowing border
+          for (const target of mixState.validTargets) {
+            const tx2 = bx + target.col * (tw + gx);
+            const ty2 = by + target.row * (th + gy);
+            const tv = grid[target.row][target.col];
+            this.drawTile(tx2, ty2, tw, th, br, s, tv, 1, 1);
+            this.drawSelectionBorder(tx2, ty2, tw, th, br, s, 'rgba(255,255,255,0.8)', 2);
+          }
         }
       } else {
         // Draw "Mix" buttons on Gray tiles (when not in mix mode)
@@ -961,7 +976,71 @@ export class Renderer {
   }
 
   /**
+   * Draw a rounded-rect selection border on a tile.
+   */
+  private drawSelectionBorder(
+    x: number, y: number,
+    w: number, h: number,
+    r: number, s: number,
+    color: string, lineWidth = 3,
+  ): void {
+    const ctx = this.ctx;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth * s;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  /**
+   * Draw Confirm and Cancel buttons below the board during mix preview.
+   */
+  private drawConfirmCancelButtons(
+    vw: number, boardY: number, s: number,
+  ): void {
+    const ctx = this.ctx;
+    const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    const btnW = BUTTON.width * s;
+    const btnH = BUTTON.height * s;
+    const btnR = BUTTON.borderRadius * s;
+    const cx = vw / 2;
+    const baseY = boardY + BOARD.height * s + SIZES.nextTileGapFromBoard * s;
+
+    // Confirm button (green)
+    const confirmX = cx - btnW / 2;
+    const confirmY = baseY;
+    this.roundRect(confirmX, confirmY, btnW, btnH, btnR, '#00CC66');
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `bold ${BUTTON.fontSize * s}px ${font}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Confirm', confirmX + btnW / 2, confirmY + btnH / 2);
+    this._confirmBtnBounds = { x: confirmX, y: confirmY, w: btnW, h: btnH };
+
+    // Cancel button (below confirm, text-style)
+    const cancelY = confirmY + btnH + 12 * s;
+    const cancelH = btnH * 0.8;
+    const cancelX = cx - btnW / 2;
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = `${(BUTTON.fontSize - 2) * s}px ${font}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Cancel', cancelX + btnW / 2, cancelY + cancelH / 2);
+    this._cancelBtnBounds = { x: cancelX, y: cancelY, w: btnW, h: cancelH };
+  }
+
+  /**
    * Draw "Mix" pill buttons on all Gray tiles.
+   * Faded + disabled if the Gray has no valid mix combos.
    */
   private drawMixButtons(
     grid: Grid,
@@ -979,6 +1058,8 @@ export class Renderer {
         if (val === 0) continue;
         if (tileColorIndex(val) !== GRAY_IDX) continue;
 
+        const hasValidMix = grayHasValidMix(grid, { row: r, col: c });
+
         // Position Mix button at bottom center of tile
         const tileX = bx + c * (tw + gx);
         const tileY = by + r * (th + gy);
@@ -988,21 +1069,26 @@ export class Renderer {
         const btnY = tileY + th - btnH - 6 * s;
         const btnR = btnH / 2;
 
-        // Pill background
+        // Pill background (faded when disabled)
         ctx.save();
-        ctx.globalAlpha = 0.9;
+        ctx.globalAlpha = hasValidMix ? 0.9 : 0.3;
         this.roundRect(btnX, btnY, btnW, btnH, btnR, '#FFFFFF');
         ctx.restore();
 
-        // "Mix" text
+        // "Mix" text (faded when disabled)
+        ctx.save();
+        ctx.globalAlpha = hasValidMix ? 1 : 0.4;
         ctx.fillStyle = '#000000';
         ctx.font = `bold ${10 * s}px ${font}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('Mix', btnX + btnW / 2, btnY + btnH / 2);
+        ctx.restore();
 
-        // Store bounds for hit testing
-        this._mixBtnBounds.set(`${r},${c}`, { x: btnX, y: btnY, w: btnW, h: btnH });
+        // Only store bounds for hit testing if valid
+        if (hasValidMix) {
+          this._mixBtnBounds.set(`${r},${c}`, { x: btnX, y: btnY, w: btnW, h: btnH });
+        }
       }
     }
   }

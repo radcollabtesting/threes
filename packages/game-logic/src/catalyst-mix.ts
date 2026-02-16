@@ -193,6 +193,27 @@ export function hasValidCatalystMix(grid: Grid): boolean {
 }
 
 /**
+ * Checks whether a specific Gray tile has at least one valid catalyst mix.
+ * Used to decide whether to enable/disable the Mix button on that tile.
+ */
+export function grayHasValidMix(grid: Grid, grayPos: Position): boolean {
+  const val = grid[grayPos.row]?.[grayPos.col];
+  if (!val || tileColorIndex(val) !== GRAY_IDX) return false;
+
+  const targets = getValidMixTargets(grid, grayPos);
+  if (targets.length < 2) return false;
+
+  for (let i = 0; i < targets.length; i++) {
+    for (let j = i + 1; j < targets.length; j++) {
+      const ci1 = tileColorIndex(grid[targets[i].row][targets[i].col]);
+      const ci2 = tileColorIndex(grid[targets[j].row][targets[j].col]);
+      if (catalystMixColorResult(ci1, ci2) !== -1) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Executes a catalyst mix on the grid (mutates in place).
  *
  * @returns The resulting tile value and animation events,

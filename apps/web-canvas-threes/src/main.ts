@@ -28,6 +28,7 @@ import {
   createMixState,
   startMix,
   mixSelectTile,
+  confirmMix,
   cancelMix,
   type MixState,
 } from './mix-state';
@@ -291,23 +292,46 @@ canvas.addEventListener('click', (e: MouseEvent) => {
 
   // Mix mode interactions (not during tutorial or game over)
   if (!tutorial && game.status !== 'ended') {
-    // If in mix selection mode, handle tile taps
+    // If in mix selection/preview mode, handle interactions
     if (mixState.phase !== 'idle') {
-      const tilePos = renderer.hitTestGrid(e.clientX, e.clientY);
-      if (tilePos) {
-        // Save grayPos before mixSelectTile may reset it
-        const savedGrayPos = mixState.grayPos
-          ? { row: mixState.grayPos.row, col: mixState.grayPos.col }
-          : null;
-        const result = mixSelectTile(mixState, game.grid, tilePos);
-        if (result.result === 'complete' && savedGrayPos) {
-          const success = game.catalystMix(savedGrayPos, result.src1, result.src2);
+      // Check Confirm button (preview phase)
+      const confirmBounds = renderer.confirmButtonBounds;
+      if (confirmBounds &&
+        e.clientX >= confirmBounds.x && e.clientX <= confirmBounds.x + confirmBounds.w &&
+        e.clientY >= confirmBounds.y && e.clientY <= confirmBounds.y + confirmBounds.h
+      ) {
+        const mixData = confirmMix(mixState);
+        if (mixData) {
+          const success = game.catalystMix(mixData.grayPos, mixData.src1, mixData.src2);
           if (success) {
-            const resultVal = game.grid[savedGrayPos.row][savedGrayPos.col];
-            triggerRipple(anim, savedGrayPos.row, savedGrayPos.col, tileHex(resultVal));
+            const resultVal = game.grid[mixData.grayPos.row][mixData.grayPos.col];
+            triggerRipple(anim, mixData.grayPos.row, mixData.grayPos.col, tileHex(resultVal));
             playMergeSound(3);
           }
         }
+        return;
+      }
+
+      // Check Cancel button (preview phase)
+      const cancelBounds = renderer.cancelButtonBounds;
+      if (cancelBounds &&
+        e.clientX >= cancelBounds.x && e.clientX <= cancelBounds.x + cancelBounds.w &&
+        e.clientY >= cancelBounds.y && e.clientY <= cancelBounds.y + cancelBounds.h
+      ) {
+        cancelMix(mixState);
+        return;
+      }
+
+      // During preview phase, clicks on the board cancel
+      if (mixState.phase === 'previewing') {
+        cancelMix(mixState);
+        return;
+      }
+
+      // During selection phases, handle tile taps
+      const tilePos = renderer.hitTestGrid(e.clientX, e.clientY);
+      if (tilePos) {
+        mixSelectTile(mixState, game.grid, tilePos);
       } else {
         // Tapped outside the grid — cancel mix mode
         cancelMix(mixState);

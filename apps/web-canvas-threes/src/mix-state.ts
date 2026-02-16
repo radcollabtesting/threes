@@ -2,10 +2,10 @@
  * Mix selection state machine for the Gray catalyst mechanic.
  *
  * State flow:
- *   idle → selectingFirst → selectingSecond → idle
+ *   idle → selectingFirst → selectingSecond → previewing → idle
  *
- * The user taps "Mix" on a Gray tile, then picks two adjacent tiles
- * to blend. The result replaces the Gray, consuming all three tiles.
+ * The user taps "Mix" on a Gray tile, picks two adjacent tiles,
+ * sees a preview of the result on the Gray, then confirms or cancels.
  */
 
 import type { Position, Grid, CellValue } from '@threes/game-logic';
@@ -14,9 +14,10 @@ import {
   GRAY_IDX,
   getValidMixTargets,
   catalystMixColorResult,
+  encodeTile,
 } from '@threes/game-logic';
 
-export type MixPhase = 'idle' | 'selectingFirst' | 'selectingSecond';
+export type MixPhase = 'idle' | 'selectingFirst' | 'selectingSecond' | 'previewing';
 
 export interface MixState {
   phase: MixPhase;
@@ -24,10 +25,14 @@ export interface MixState {
   grayPos: Position | null;
   /** First selected source tile */
   firstSelection: Position | null;
+  /** Second selected source tile (set during previewing) */
+  secondSelection: Position | null;
   /** All valid adjacent positions for next selection */
   validTargets: Position[];
   /** Prompt text to show above the board */
   promptText: string;
+  /** Preview result tile value (shown on the Gray tile during previewing) */
+  previewResultValue: CellValue | null;
 }
 
 export function createMixState(): MixState {
@@ -35,8 +40,10 @@ export function createMixState(): MixState {
     phase: 'idle',
     grayPos: null,
     firstSelection: null,
+    secondSelection: null,
     validTargets: [],
     promptText: '',
+    previewResultValue: null,
   };
 }
 
@@ -56,20 +63,22 @@ export function startMix(state: MixState, grid: Grid, grayPos: Position): void {
   state.phase = 'selectingFirst';
   state.grayPos = grayPos;
   state.firstSelection = null;
+  state.secondSelection = null;
   state.validTargets = targets;
   state.promptText = 'Select first tile to mix';
+  state.previewResultValue = null;
 }
 
 /**
  * Handle a tile tap during mix selection.
- * Returns 'complete' with both positions when two valid tiles are chosen,
+ * Returns 'previewing' when both tiles are chosen (enters preview state),
  * 'continue' if waiting for more input, or 'cancel' if tapped invalid area.
  */
 export function mixSelectTile(
   state: MixState,
   grid: Grid,
   pos: Position,
-): { result: 'complete'; src1: Position; src2: Position }
+): { result: 'previewing' }
  | { result: 'continue' }
  | { result: 'cancel' } {
   if (state.phase === 'idle' || !state.grayPos) {
@@ -113,14 +122,45 @@ export function mixSelectTile(
   }
 
   if (state.phase === 'selectingSecond' && state.firstSelection) {
-    const src1 = state.firstSelection;
-    const src2 = pos;
-    cancelMix(state);
-    return { result: 'complete', src1, src2 };
+    // Compute preview result
+    const ci1 = tileColorIndex(grid[state.firstSelection.row][state.firstSelection.col]);
+    const ci2 = tileColorIndex(grid[pos.row][pos.col]);
+    const resultCI = catalystMixColorResult(ci1, ci2);
+    if (resultCI === -1) {
+      cancelMix(state);
+      return { result: 'cancel' };
+    }
+
+    state.secondSelection = pos;
+    state.previewResultValue = encodeTile(resultCI, 0);
+    state.phase = 'previewing';
+    state.promptText = 'Preview — confirm or cancel';
+    state.validTargets = [];
+    return { result: 'previewing' };
   }
 
   cancelMix(state);
   return { result: 'cancel' };
+}
+
+/**
+ * Confirm the previewed mix. Returns the positions needed to execute.
+ */
+export function confirmMix(state: MixState): {
+  grayPos: Position;
+  src1: Position;
+  src2: Position;
+} | null {
+  if (state.phase !== 'previewing' || !state.grayPos || !state.firstSelection || !state.secondSelection) {
+    return null;
+  }
+  const result = {
+    grayPos: { row: state.grayPos.row, col: state.grayPos.col },
+    src1: { row: state.firstSelection.row, col: state.firstSelection.col },
+    src2: { row: state.secondSelection.row, col: state.secondSelection.col },
+  };
+  cancelMix(state);
+  return result;
 }
 
 /**
@@ -130,8 +170,10 @@ export function cancelMix(state: MixState): void {
   state.phase = 'idle';
   state.grayPos = null;
   state.firstSelection = null;
+  state.secondSelection = null;
   state.validTargets = [];
   state.promptText = '';
+  state.previewResultValue = null;
 }
 
 /**
