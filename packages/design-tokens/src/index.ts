@@ -18,6 +18,38 @@ export const COLORS = {
   scoreText: '#FFFFFF',
 } as const;
 
+/* ── Theme colors ─────────────────────────────────────── */
+
+export interface ThemeColors {
+  background: string;
+  emptyCellSlot: string;
+  nextLabelText: string;
+  scoreText: string;
+  uiText: string;
+  tileBorder: string;
+  overlayBackground: string;
+}
+
+export const DARK_THEME: ThemeColors = {
+  background: '#000000',
+  emptyCellSlot: '#292929',
+  nextLabelText: '#FFFFFF',
+  scoreText: '#FFFFFF',
+  uiText: '#FFFFFF',
+  tileBorder: '#000000',
+  overlayBackground: 'rgba(0,0,0,0.7)',
+};
+
+export const LIGHT_THEME: ThemeColors = {
+  background: '#FFFFFF',
+  emptyCellSlot: '#D4D4D4',
+  nextLabelText: '#000000',
+  scoreText: '#000000',
+  uiText: '#000000',
+  tileBorder: '#000000',
+  overlayBackground: 'rgba(0,0,0,0.55)',
+};
+
 /* ── Size tokens (baseline dp) ─────────────────────────── */
 
 export const SIZES = {

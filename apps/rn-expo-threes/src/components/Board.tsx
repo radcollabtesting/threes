@@ -80,9 +80,11 @@ interface BoardProps {
   shakeCounter: number;
   /** When true, letter labels shown on tiles (default true) */
   colorBlindMode?: boolean;
+  /** Color for empty cell slots (supports theming) */
+  emptyCellColor?: string;
 }
 
-export function Board({ grid, moveEvents, scale, shakeCounter, colorBlindMode = true }: BoardProps) {
+export function Board({ grid, moveEvents, scale, shakeCounter, colorBlindMode = true, emptyCellColor }: BoardProps) {
   const s = scale;
   const tw = SIZES.tileWidth * s;
   const th = SIZES.tileHeight * s;
@@ -146,7 +148,7 @@ export function Board({ grid, moveEvents, scale, shakeCounter, colorBlindMode = 
                 width: tw,
                 height: th,
                 borderRadius: br,
-                backgroundColor: COLORS.emptyCellSlot,
+                backgroundColor: emptyCellColor ?? COLORS.emptyCellSlot,
                 position: 'absolute',
                 left: c * (tw + gx),
                 top: r * (th + gy),
