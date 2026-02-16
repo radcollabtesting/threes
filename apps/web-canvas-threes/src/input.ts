@@ -25,6 +25,8 @@ export interface InputCallbacks {
   onDragMove: (x: number, y: number) => void;
   /** Pointer released */
   onDragEnd: () => void;
+  /** Escape key pressed */
+  onEscape?: () => void;
 }
 
 /* ── Axis-lock helper (exported for use by main.ts) ────── */
@@ -58,6 +60,7 @@ export function setupInput(
   const DEBOUNCE_MS = 160;
 
   function onKeyDown(e: KeyboardEvent): void {
+    if (e.key === 'Escape') { cb.onEscape?.(); return; }
     if (e.key === 'r' || e.key === 'R') { cb.onRestart(); return; }
 
     let dir: Direction | null = null;

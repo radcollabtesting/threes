@@ -11,7 +11,7 @@
  * Touch/mouse: drag to preview, release past 50% to commit.
  */
 
-import { ThreesGame, cloneGrid, scoreGrid, type Direction, type MoveEvent } from '@threes/game-logic';
+import { ThreesGame, cloneGrid, scoreGrid, tileHex, type Direction, type MoveEvent } from '@threes/game-logic';
 import { Renderer } from './renderer';
 import type { GameOverData, TutorialRenderInfo } from './renderer';
 import {
@@ -20,9 +20,17 @@ import {
   triggerSpawnOnly,
   triggerNextTileAnim,
   triggerShake,
+  triggerRipple,
   updateAnimations,
   type AnimState,
 } from './animation';
+import {
+  createMixState,
+  startMix,
+  mixSelectTile,
+  cancelMix,
+  type MixState,
+} from './mix-state';
 import { setupInput, resolveSwipe, type InputCallbacks } from './input';
 import {
   createDragState,
@@ -64,6 +72,7 @@ const drag: DragState = createDragState();
 let game = new ThreesGame({ seed, fixtureMode, nextTileStrategy, scoringEnabled });
 let gameOverData: GameOverData | null = null;
 let tutorial: TutorialState | null = null;
+const mixState: MixState = createMixState();
 
 function onGameOver(): void {
   const finalScore = scoreGrid(game.grid);
@@ -92,6 +101,7 @@ const tutorialBtn = document.getElementById('tutorial-btn') as HTMLButtonElement
 function startTutorial(): void {
   tutorial = createTutorialState();
   resetDrag(drag);
+  cancelMix(mixState);
   gameOverData = null;
   tutorialBtn.style.display = 'none';
 }
@@ -119,6 +129,7 @@ if (!localStorage.getItem('tutorialComplete')) {
  */
 function handleInstantMove(direction: Direction): void {
   if (drag.phase !== 'idle') return;
+  if (mixState.phase !== 'idle') return; // block moves during mix selection
 
   if (tutorial) {
     const oldNext = tutorial.nextTile;
@@ -153,6 +164,7 @@ function handleNewGame(): void {
   if (tutorial) return; // ignore R key during tutorial
   game.restart();
   resetDrag(drag);
+  cancelMix(mixState);
   gameOverData = null;
 }
 
@@ -161,6 +173,7 @@ function handleNewGame(): void {
  */
 function handleDragStart(x: number, y: number): void {
   if (drag.phase !== 'idle') return;
+  if (mixState.phase !== 'idle') return; // block drag during mix selection
 
   if (tutorial) {
     drag.phase = 'pending';
@@ -246,6 +259,7 @@ const inputCallbacks: InputCallbacks = {
   onDragStart: handleDragStart,
   onDragMove: handleDragMove,
   onDragEnd: handleDragEnd,
+  onEscape: () => cancelMix(mixState),
 };
 
 setupInput(canvas, inputCallbacks);
@@ -271,6 +285,40 @@ canvas.addEventListener('click', (e: MouseEvent) => {
   ) {
     endTutorial();
     return;
+  }
+
+  // Mix mode interactions (not during tutorial or game over)
+  if (!tutorial && game.status !== 'ended') {
+    // If in mix selection mode, handle tile taps
+    if (mixState.phase !== 'idle') {
+      const tilePos = renderer.hitTestGrid(e.clientX, e.clientY);
+      if (tilePos) {
+        // Save grayPos before mixSelectTile may reset it
+        const savedGrayPos = mixState.grayPos
+          ? { row: mixState.grayPos.row, col: mixState.grayPos.col }
+          : null;
+        const result = mixSelectTile(mixState, game.grid, tilePos);
+        if (result.result === 'complete' && savedGrayPos) {
+          const success = game.catalystMix(savedGrayPos, result.src1, result.src2);
+          if (success) {
+            const resultVal = game.grid[savedGrayPos.row][savedGrayPos.col];
+            triggerRipple(anim, savedGrayPos.row, savedGrayPos.col, tileHex(resultVal));
+            playMergeSound(3);
+          }
+        }
+      } else {
+        // Tapped outside the grid — cancel mix mode
+        cancelMix(mixState);
+      }
+      return;
+    }
+
+    // Check for Mix button tap (enters mix mode)
+    const mixBtnPos = renderer.hitTestMixButton(e.clientX, e.clientY);
+    if (mixBtnPos) {
+      startMix(mixState, game.grid, mixBtnPos);
+      return;
+    }
   }
 });
 
@@ -371,6 +419,8 @@ function loop(now: number): void {
       drag.phase === 'dragging' || drag.phase === 'snapping' ? drag : null,
       gameOverData,
       game.score,
+      null,
+      mixState,
     );
   }
 

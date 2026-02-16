@@ -15,6 +15,13 @@ export {
   gridToString,
 } from './board';
 export { DEFAULT_CONFIG, resolveConfig } from './config';
+export {
+  catalystMixColorResult,
+  getValidMixTargets,
+  canCatalystMix,
+  applyCatalystMix,
+  getAdjacentPositions,
+} from './catalyst-mix';
 
 export {
   encodeTile,
@@ -47,6 +54,7 @@ export {
   TURQUOISE_IDX,
   INDIGO_IDX,
   GRAY_IDX,
+  BROWN_IDX,
   NUM_COLORS,
 } from './color';
 

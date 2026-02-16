@@ -19,7 +19,9 @@ import { selectSpawnPosition } from './spawn';
 import { createNextTileGenerator } from './next-tile';
 import { scoreGrid } from './score';
 import { createRng, pickRandom, randomInt } from '@threes/rng';
-import { BASE_TILES, MAGENTA } from './color';
+import { BASE_TILES, MAGENTA, tileColorIndex, GRAY_IDX } from './color';
+import { applyCatalystMix } from './catalyst-mix';
+import type { Position } from './types';
 
 /**
  * Core game engine for the color mixing game.
@@ -165,6 +167,57 @@ export class ThreesGame {
     }
 
     return true;
+  }
+
+  /**
+   * Performs a catalyst mix: sacrifice a Gray tile to blend two adjacent tiles.
+   *
+   * The Gray tile and both source tiles are consumed (3 tiles → 1).
+   * The blended result (with +1 bonus dot) replaces the Gray's position.
+   * Does not consume a turn or spawn a new tile.
+   *
+   * @returns true if the mix was valid and applied; false otherwise.
+   */
+  catalystMix(grayPos: Position, src1: Position, src2: Position): boolean {
+    if (this._status !== 'playing') return false;
+
+    // Validate Gray tile
+    const grayVal = this._grid[grayPos.row]?.[grayPos.col];
+    if (!grayVal || tileColorIndex(grayVal) !== GRAY_IDX) return false;
+
+    const result = applyCatalystMix(this._grid, grayPos, src1, src2);
+    if (!result) return false;
+
+    this._lastMoveEvents = result.events;
+
+    // Update score
+    if (this.config.scoringEnabled) {
+      this._score = Math.max(this._score, scoreGrid(this._grid));
+    }
+
+    // Check game-over (unlikely after removing tiles, but be safe)
+    if (!hasAnyValidMove(this._grid)) {
+      this._status = 'ended';
+      this._score = Math.max(this._score, scoreGrid(this._grid));
+    }
+
+    return true;
+  }
+
+  /**
+   * Returns positions of all Gray tiles on the board.
+   */
+  getGrayPositions(): Position[] {
+    const positions: Position[] = [];
+    for (let r = 0; r < this.config.gridSize; r++) {
+      for (let c = 0; c < this.config.gridSize; c++) {
+        const val = this._grid[r][c];
+        if (val !== 0 && tileColorIndex(val) === GRAY_IDX) {
+          positions.push({ row: r, col: c });
+        }
+      }
+    }
+    return positions;
   }
 
   /**

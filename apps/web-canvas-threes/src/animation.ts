@@ -42,12 +42,20 @@ export interface NextTileAnim {
   newValue: number;
 }
 
+export interface RippleAnim {
+  row: number;
+  col: number;
+  progress: number; // 0 → 1
+  color: string;    // result tile color
+}
+
 export interface AnimState {
   slides: Map<string, SlideAnim>;
   merges: Map<string, MergeAnim>;
   spawns: Map<string, SpawnAnim>;
   shake: { progress: number; active: boolean };
   nextTile: NextTileAnim;
+  ripple: RippleAnim | null;
 }
 
 /* ── Factory ───────────────────────────────────────────── */
@@ -59,6 +67,7 @@ export function createAnimState(): AnimState {
     spawns: new Map(),
     shake: { progress: 1, active: false },
     nextTile: { active: false, progress: 1, oldValue: 0, newValue: 0 },
+    ripple: null,
   };
 }
 
@@ -145,6 +154,14 @@ export function triggerNextTileAnim(anim: AnimState, oldValue: number, newValue:
   anim.nextTile = { active: true, progress: 0, oldValue, newValue };
 }
 
+/** Duration for the catalyst mix ripple effect (ms) */
+const RIPPLE_DURATION = 400;
+
+/** Triggers a ripple animation at the given grid position (catalyst mix). */
+export function triggerRipple(anim: AnimState, row: number, col: number, color: string): void {
+  anim.ripple = { row, col, progress: 0, color };
+}
+
 /** Triggers the invalid-move shake. Respects prefers-reduced-motion. */
 export function triggerShake(anim: AnimState): void {
   if (typeof window !== 'undefined' &&
@@ -209,6 +226,13 @@ export function updateAnimations(anim: AnimState, dt: number): boolean {
   if (anim.shake.active && anim.shake.progress < 1) {
     anim.shake.progress = Math.min(1, anim.shake.progress + dt / ANIMATION.shakeDuration);
     active = true;
+  }
+
+  // Ripple (catalyst mix)
+  if (anim.ripple && anim.ripple.progress < 1) {
+    anim.ripple.progress = Math.min(1, anim.ripple.progress + dt / RIPPLE_DURATION);
+    active = true;
+    if (anim.ripple.progress >= 1) anim.ripple = null;
   }
 
   return active;

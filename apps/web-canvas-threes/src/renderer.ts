@@ -5,11 +5,12 @@
  * Tile colors are computed dynamically from the color encoding system.
  */
 
-import { scoreTile, tileHex, tileTextColor, tileLabel, tileDisplayDots, getMergePartners, encodeTile, canMerge, tileColorIndex, mergeResult, type CellValue, type Grid, type Direction } from '@threes/game-logic';
+import { scoreTile, tileHex, tileTextColor, tileLabel, tileDisplayDots, getMergePartners, encodeTile, canMerge, tileColorIndex, mergeResult, GRAY_IDX, type CellValue, type Grid, type Direction, type Position } from '@threes/game-logic';
 import { COLORS, SIZES, BOARD, ANIMATION, BUTTON, SCORE_LIST } from '@threes/design-tokens';
 import type { AnimState } from './animation';
 import type { DragState, TilePreview } from './drag';
 import type { ScoreEntry } from './score-history';
+import type { MixState } from './mix-state';
 
 export interface GameOverData {
   currentScore: number;
@@ -44,6 +45,8 @@ export class Renderer {
   private _boardY = 0;
   private _newGameBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
   private _continueBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
+  /** Mix button bounds keyed by "row,col" */
+  private _mixBtnBounds: Map<string, { x: number; y: number; w: number; h: number }> = new Map();
 
   /** When true, color letter labels are shown on tiles. */
   colorBlindMode = false;
@@ -67,6 +70,51 @@ export class Renderer {
   /** Returns the tutorial "Continue" button bounds in CSS px, or null if not rendered. */
   get continueButtonBounds(): { x: number; y: number; w: number; h: number } | null {
     return this._continueBtnBounds;
+  }
+
+  /** Returns mix button bounds map for hit testing */
+  get mixButtonBounds(): Map<string, { x: number; y: number; w: number; h: number }> {
+    return this._mixBtnBounds;
+  }
+
+  /**
+   * Hit-test a CSS coordinate against the grid, returning the cell position
+   * or null if outside the board.
+   */
+  hitTestGrid(clientX: number, clientY: number): Position | null {
+    const s = this._scale;
+    const bx = this._boardX;
+    const by = this._boardY;
+    const tw = SIZES.tileWidth * s;
+    const th = SIZES.tileHeight * s;
+    const gx = SIZES.gapX * s;
+    const gy = SIZES.gapY * s;
+
+    for (let r = 0; r < SIZES.gridSize; r++) {
+      for (let c = 0; c < SIZES.gridSize; c++) {
+        const x = bx + c * (tw + gx);
+        const y = by + r * (th + gy);
+        if (clientX >= x && clientX <= x + tw && clientY >= y && clientY <= y + th) {
+          return { row: r, col: c };
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Hit-test a CSS coordinate against any visible Mix button.
+   * Returns the Gray tile's position or null.
+   */
+  hitTestMixButton(clientX: number, clientY: number): Position | null {
+    for (const [key, bounds] of this._mixBtnBounds) {
+      if (clientX >= bounds.x && clientX <= bounds.x + bounds.w &&
+          clientY >= bounds.y && clientY <= bounds.y + bounds.h) {
+        const [r, c] = key.split(',').map(Number);
+        return { row: r, col: c };
+      }
+    }
+    return null;
   }
 
   /** Recalculates canvas size and scale factor (call on window resize) */
@@ -109,6 +157,7 @@ export class Renderer {
     gameOverData?: GameOverData | null,
     currentScore?: number,
     tutorialInfo?: TutorialRenderInfo | null,
+    mixState?: MixState | null,
   ): void {
     const ctx = this.ctx;
     const s = this._scale;
@@ -192,6 +241,110 @@ export class Renderer {
       this.drawDragTiles(drag, bx, by, tw, th, gx, gy, br, s);
     } else {
       this.drawStaticTiles(grid, anim, bx, by, tw, th, gx, gy, br, s);
+    }
+
+    // ── Mix mode UI ──────────────────────────────────────
+    this._mixBtnBounds.clear();
+    const mixActive = mixState && mixState.phase !== 'idle';
+
+    if (!isDragActive && !gameOver && !tutorialInfo) {
+      if (mixActive && mixState) {
+        // Draw mix prompt text above board
+        const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = `bold ${16 * s}px ${font}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(mixState.promptText, vw / 2, this._boardY - 12 * s);
+
+        // Dim the entire board, then brighten valid targets
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(bx, by, BOARD.width * s, BOARD.height * s);
+
+        // Highlight Gray tile with pulsing border
+        if (mixState.grayPos) {
+          const gx2 = bx + mixState.grayPos.col * (tw + gx);
+          const gy2 = by + mixState.grayPos.row * (th + gy);
+          this.drawTile(gx2, gy2, tw, th, br, s, grid[mixState.grayPos.row][mixState.grayPos.col], 1, 0.6);
+        }
+
+        // Highlight first selected tile
+        if (mixState.firstSelection) {
+          const fx = bx + mixState.firstSelection.col * (tw + gx);
+          const fy = by + mixState.firstSelection.row * (th + gy);
+          const fv = grid[mixState.firstSelection.row][mixState.firstSelection.col];
+          this.drawTile(fx, fy, tw, th, br, s, fv, 1, 1);
+          // Green selection border
+          ctx.strokeStyle = '#00FF88';
+          ctx.lineWidth = 3 * s;
+          ctx.beginPath();
+          ctx.moveTo(fx + br, fy);
+          ctx.lineTo(fx + tw - br, fy);
+          ctx.quadraticCurveTo(fx + tw, fy, fx + tw, fy + br);
+          ctx.lineTo(fx + tw, fy + th - br);
+          ctx.quadraticCurveTo(fx + tw, fy + th, fx + tw - br, fy + th);
+          ctx.lineTo(fx + br, fy + th);
+          ctx.quadraticCurveTo(fx, fy + th, fx, fy + th - br);
+          ctx.lineTo(fx, fy + br);
+          ctx.quadraticCurveTo(fx, fy, fx + br, fy);
+          ctx.closePath();
+          ctx.stroke();
+        }
+
+        // Highlight valid targets with glowing border
+        for (const target of mixState.validTargets) {
+          const tx2 = bx + target.col * (tw + gx);
+          const ty2 = by + target.row * (th + gy);
+          const tv = grid[target.row][target.col];
+          this.drawTile(tx2, ty2, tw, th, br, s, tv, 1, 1);
+          // White pulsing border for valid targets
+          ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+          ctx.lineWidth = 2 * s;
+          ctx.beginPath();
+          ctx.moveTo(tx2 + br, ty2);
+          ctx.lineTo(tx2 + tw - br, ty2);
+          ctx.quadraticCurveTo(tx2 + tw, ty2, tx2 + tw, ty2 + br);
+          ctx.lineTo(tx2 + tw, ty2 + th - br);
+          ctx.quadraticCurveTo(tx2 + tw, ty2 + th, tx2 + tw - br, ty2 + th);
+          ctx.lineTo(tx2 + br, ty2 + th);
+          ctx.quadraticCurveTo(tx2, ty2 + th, tx2, ty2 + th - br);
+          ctx.lineTo(tx2, ty2 + br);
+          ctx.quadraticCurveTo(tx2, ty2, tx2 + br, ty2);
+          ctx.closePath();
+          ctx.stroke();
+        }
+      } else {
+        // Draw "Mix" buttons on Gray tiles (when not in mix mode)
+        this.drawMixButtons(grid, bx, by, tw, th, gx, gy, br, s);
+      }
+    }
+
+    // ── Ripple animation (catalyst mix) ─────────────────
+    if (anim.ripple && anim.ripple.progress < 1) {
+      const rp = anim.ripple;
+      const rx = bx + rp.col * (tw + gx) + tw / 2;
+      const ry = by + rp.row * (th + gy) + th / 2;
+      const maxRadius = Math.max(tw, th) * 1.5;
+      const radius = maxRadius * easeOut(rp.progress);
+      const alpha = 1 - rp.progress;
+
+      ctx.save();
+      ctx.strokeStyle = rp.color;
+      ctx.lineWidth = 3 * s;
+      ctx.globalAlpha = alpha * 0.7;
+      ctx.beginPath();
+      ctx.arc(rx, ry, radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Second smaller ring
+      if (rp.progress > 0.1) {
+        const r2 = maxRadius * easeOut(Math.max(0, rp.progress - 0.15));
+        ctx.globalAlpha = alpha * 0.4;
+        ctx.beginPath();
+        ctx.arc(rx, ry, r2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
 
     // ── Next tile preview ─────────────────────────────────
@@ -752,6 +905,53 @@ export class Renderer {
       for (const ind of indicators.bottom) {
         drawLine(ix, y + h - lineW, lineL, lineW, tileHex(encodeTile(ind.colorIndex, 0)), ind.blocked);
         ix += lineL + gap;
+      }
+    }
+  }
+
+  /**
+   * Draw "Mix" pill buttons on all Gray tiles.
+   */
+  private drawMixButtons(
+    grid: Grid,
+    bx: number, by: number,
+    tw: number, th: number,
+    gx: number, gy: number,
+    br: number, s: number,
+  ): void {
+    const ctx = this.ctx;
+    const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
+    for (let r = 0; r < SIZES.gridSize; r++) {
+      for (let c = 0; c < SIZES.gridSize; c++) {
+        const val = grid[r][c];
+        if (val === 0) continue;
+        if (tileColorIndex(val) !== GRAY_IDX) continue;
+
+        // Position Mix button at bottom center of tile
+        const tileX = bx + c * (tw + gx);
+        const tileY = by + r * (th + gy);
+        const btnW = 36 * s;
+        const btnH = 18 * s;
+        const btnX = tileX + (tw - btnW) / 2;
+        const btnY = tileY + th - btnH - 6 * s;
+        const btnR = btnH / 2;
+
+        // Pill background
+        ctx.save();
+        ctx.globalAlpha = 0.9;
+        this.roundRect(btnX, btnY, btnW, btnH, btnR, '#FFFFFF');
+        ctx.restore();
+
+        // "Mix" text
+        ctx.fillStyle = '#000000';
+        ctx.font = `bold ${10 * s}px ${font}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Mix', btnX + btnW / 2, btnY + btnH / 2);
+
+        // Store bounds for hit testing
+        this._mixBtnBounds.set(`${r},${c}`, { x: btnX, y: btnY, w: btnW, h: btnH });
       }
     }
   }

@@ -37,7 +37,8 @@ export const TEAL_IDX = 9;
 export const TURQUOISE_IDX = 10;
 export const INDIGO_IDX = 11;
 export const GRAY_IDX = 12;
-export const NUM_COLORS = 13;
+export const BROWN_IDX = 13;
+export const NUM_COLORS = 14;
 
 /* ── Encoding / Decoding ──────────────────────────────── */
 
@@ -58,7 +59,7 @@ export function tileDots(id: CellValue): number {
 const BASE_INDICES = new Set([CYAN_IDX, MAGENTA_IDX, YELLOW_IDX]);
 const PRIMARY_INDICES = new Set([BLUE_IDX, RED_IDX, GREEN_IDX]);
 const SECONDARY_INDICES = new Set([
-  ORANGE_IDX, VIOLET_IDX, INDIGO_IDX, TEAL_IDX,
+  ORANGE_IDX, VIOLET_IDX, INDIGO_IDX, TEAL_IDX, BROWN_IDX,
 ]);
 const TERTIARY_INDICES = new Set([GRAY_IDX]);
 
@@ -76,19 +77,20 @@ export function tileTier(id: CellValue): number {
 
 /**
  * Returns the number of white dots to display on a tile.
- * Dots indicate the tile's tier/value progression:
- *   Base (C/M/Y):        0 dots
- *   Primary (R/G/B):     1 dot
- *   Secondary (O/V/I/T): 2 dots
+ * Dots indicate the tile's tier/value progression plus any catalyst mix bonus:
+ *   Base (C/M/Y):        0 dots + mix bonus
+ *   Primary (R/G/B):     1 dot  + mix bonus
+ *   Secondary (O/V/I/T): 2 dots + mix bonus
  *   Gray:                2 dots + 1 per gray merge
  */
 export function tileDisplayDots(id: CellValue): number {
   if (id === 0) return 0;
   const tier = tileTier(id);
-  if (tier <= 0) return 0;
-  if (tier <= 2) return tier;
+  const dots = tileDots(id);
+  if (tier <= 0) return dots;
+  if (tier <= 2) return tier + dots;
   // Gray (tier 3): starts at 2, +1 per gray merge
-  return 2 + tileDots(id);
+  return 2 + dots;
 }
 
 /* ── Display: hex colors ─────────────────────────────── */
@@ -108,6 +110,7 @@ HEX_MAP[TURQUOISE_IDX] = '#54b4ff';
 HEX_MAP[INDIGO_IDX] = '#8054ff';
 // Gray uses a dynamic scale — see grayHex() below.
 // HEX_MAP[GRAY_IDX] is intentionally left unset.
+HEX_MAP[BROWN_IDX] = '#A0522D';
 
 /**
  * Returns a gray hex that darkens with each merge.
@@ -174,6 +177,7 @@ const MERGE_MAP: Record<number, number> = {
   [TEAL_IDX]: GRAY_IDX,        // T+T → Gray
   [TURQUOISE_IDX]: GRAY_IDX,   // Tu+Tu → Gray
   [INDIGO_IDX]: GRAY_IDX,      // I+I → Gray
+  [BROWN_IDX]: GRAY_IDX,       // Br+Br → Gray
 };
 
 /* ── Merge logic ─────────────────────────────────────── */
