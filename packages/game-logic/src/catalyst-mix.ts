@@ -99,6 +99,17 @@ addMix(INDIGO_IDX, RED_IDX, RED_IDX);
 addMix(INDIGO_IDX, GREEN_IDX, BROWN_IDX);
 addMix(INDIGO_IDX, BLUE_IDX, BLUE_IDX);
 
+// Brown (13) + anything → Brown
+addMix(BROWN_IDX, CYAN_IDX, BROWN_IDX);
+addMix(BROWN_IDX, MAGENTA_IDX, BROWN_IDX);
+addMix(BROWN_IDX, YELLOW_IDX, BROWN_IDX);
+addMix(BROWN_IDX, RED_IDX, BROWN_IDX);
+addMix(BROWN_IDX, BLUE_IDX, BROWN_IDX);
+addMix(BROWN_IDX, GREEN_IDX, BROWN_IDX);
+addMix(BROWN_IDX, ORANGE_IDX, BROWN_IDX);
+addMix(BROWN_IDX, TEAL_IDX, BROWN_IDX);
+addMix(BROWN_IDX, INDIGO_IDX, BROWN_IDX);
+
 /* ── Helpers ──────────────────────────────────────────── */
 
 /** Returns the 4 orthogonal neighbors (clamped to grid bounds). */

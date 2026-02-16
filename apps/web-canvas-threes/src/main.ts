@@ -21,6 +21,7 @@ import {
   triggerNextTileAnim,
   triggerShake,
   triggerRipple,
+  triggerMixSlide,
   updateAnimations,
   type AnimState,
 } from './animation';
@@ -132,6 +133,7 @@ if (!localStorage.getItem('tutorialComplete')) {
 function handleInstantMove(direction: Direction): void {
   if (drag.phase !== 'idle') return;
   if (mixState.phase !== 'idle') return; // block moves during mix selection
+  if (anim.mixSlide) return; // block during mix animation
 
   if (tutorial) {
     const oldNext = tutorial.nextTile;
@@ -176,6 +178,7 @@ function handleNewGame(): void {
 function handleDragStart(x: number, y: number): void {
   if (drag.phase !== 'idle') return;
   if (mixState.phase !== 'idle') return; // block drag during mix selection
+  if (anim.mixSlide) return; // block during mix animation
 
   if (tutorial) {
     drag.phase = 'pending';
@@ -302,10 +305,18 @@ canvas.addEventListener('click', (e: MouseEvent) => {
       ) {
         const mixData = confirmMix(mixState);
         if (mixData) {
+          // Capture source tile values before the mix changes the grid
+          const gridSnap = game.grid;
+          const src1Val = gridSnap[mixData.src1.row][mixData.src1.col];
+          const src2Val = gridSnap[mixData.src2.row][mixData.src2.col];
+
           const success = game.catalystMix(mixData.grayPos, mixData.src1, mixData.src2);
           if (success) {
-            const resultVal = game.grid[mixData.grayPos.row][mixData.grayPos.col];
-            triggerRipple(anim, mixData.grayPos.row, mixData.grayPos.col, tileHex(resultVal));
+            triggerMixSlide(anim,
+              mixData.src1.row, mixData.src1.col, src1Val,
+              mixData.src2.row, mixData.src2.col, src2Val,
+              mixData.grayPos.row, mixData.grayPos.col,
+            );
             playMergeSound(3);
           }
         }
@@ -341,7 +352,7 @@ canvas.addEventListener('click', (e: MouseEvent) => {
 
     // Check for Mix button tap (enters mix mode)
     const mixBtnPos = renderer.hitTestMixButton(e.clientX, e.clientY);
-    if (mixBtnPos) {
+    if (mixBtnPos && !anim.mixSlide) {
       startMix(mixState, game.grid, mixBtnPos);
       return;
     }
@@ -412,6 +423,15 @@ function loop(now: number): void {
 
   // Standard animations (slide/merge/spawn/shake)
   updateAnimations(anim, dt);
+
+  // Mix slide completed → trigger ripple + merge pop
+  if (anim.mixSlide && anim.mixSlide.progress >= 1) {
+    const ms = anim.mixSlide;
+    const resultVal = game.grid[ms.targetRow][ms.targetCol];
+    triggerRipple(anim, ms.targetRow, ms.targetCol, tileHex(resultVal));
+    anim.merges.set(`${ms.targetRow},${ms.targetCol}`, { value: resultVal, progress: 0 });
+    anim.mixSlide = null;
+  }
 
   // Choose which grid/state to render
   if (tutorial) {

@@ -329,8 +329,8 @@ export class Renderer {
             this.drawSelectionBorder(tx2, ty2, tw, th, br, s, 'rgba(255,255,255,0.8)', 2);
           }
         }
-      } else {
-        // Draw "Mix" buttons on Gray tiles (when not in mix mode)
+      } else if (!anim.mixSlide) {
+        // Draw "Mix" buttons on Gray tiles (when not in mix mode or animating)
         this.drawMixButtons(grid, bx, by, tw, th, gx, gy, br, s);
       }
     }
@@ -539,6 +539,10 @@ export class Renderer {
         const val = grid[r][c];
         if (val === 0) continue;
 
+        // Hide result tile at mix target during slide animation
+        if (anim.mixSlide && anim.mixSlide.progress < 1 &&
+            r === anim.mixSlide.targetRow && c === anim.mixSlide.targetCol) continue;
+
         const key = `${r},${c}`;
         let x = bx + c * (tw + gx);
         let y = by + r * (th + gy);
@@ -591,6 +595,34 @@ export class Renderer {
         const indicators = this.getMergeIndicators(grid, r, c);
         this.drawMergeIndicators(x, y, tw, th, s, indicators);
       }
+    }
+
+    // Draw mix slide source tiles (sliding toward gray target)
+    if (anim.mixSlide && anim.mixSlide.progress < 1) {
+      const ms = anim.mixSlide;
+      const p = easeOut(ms.progress);
+      const targetX = bx + ms.targetCol * (tw + gx);
+      const targetY = by + ms.targetRow * (th + gy);
+
+      // Fade and shrink as tiles approach target
+      const alpha = 1 - p * 0.6;
+      const scale = 1 - p * 0.3;
+
+      // Source 1
+      const s1x = bx + ms.src1Col * (tw + gx);
+      const s1y = by + ms.src1Row * (th + gy);
+      this.drawTile(
+        s1x + (targetX - s1x) * p, s1y + (targetY - s1y) * p,
+        tw, th, br, s, ms.src1Value as CellValue, scale, alpha,
+      );
+
+      // Source 2
+      const s2x = bx + ms.src2Col * (tw + gx);
+      const s2y = by + ms.src2Row * (th + gy);
+      this.drawTile(
+        s2x + (targetX - s2x) * p, s2y + (targetY - s2y) * p,
+        tw, th, br, s, ms.src2Value as CellValue, scale, alpha,
+      );
     }
   }
 
