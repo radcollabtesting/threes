@@ -77,20 +77,19 @@ export function tileTier(id: CellValue): number {
 
 /**
  * Returns the number of white dots to display on a tile.
- * Dots indicate the tile's tier/value progression plus any catalyst mix bonus:
- *   Base (C/M/Y):        0 dots + mix bonus
- *   Primary (R/G/B):     1 dot  + mix bonus
- *   Secondary (O/V/I/T): 2 dots + mix bonus
+ * Dots indicate the tile's tier/value progression:
+ *   Base (C/M/Y):        0 dots
+ *   Primary (R/G/B):     1 dot
+ *   Secondary (O/V/I/T): 2 dots
  *   Gray:                2 dots + 1 per gray merge
  */
 export function tileDisplayDots(id: CellValue): number {
   if (id === 0) return 0;
   const tier = tileTier(id);
-  const dots = tileDots(id);
-  if (tier <= 0) return dots;
-  if (tier <= 2) return tier + dots;
+  if (tier <= 0) return 0;
+  if (tier <= 2) return tier;
   // Gray (tier 3): starts at 2, +1 per gray merge
-  return 2 + dots;
+  return 2 + tileDots(id);
 }
 
 /* ── Display: hex colors ─────────────────────────────── */

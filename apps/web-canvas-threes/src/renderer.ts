@@ -158,6 +158,7 @@ export class Renderer {
     currentScore?: number,
     tutorialInfo?: TutorialRenderInfo | null,
     mixState?: MixState | null,
+    multipliers?: number[][] | null,
   ): void {
     const ctx = this.ctx;
     const s = this._scale;
@@ -238,9 +239,9 @@ export class Renderer {
       (drag.phase === 'dragging' || drag.phase === 'snapping');
 
     if (isDragActive) {
-      this.drawDragTiles(drag, bx, by, tw, th, gx, gy, br, s);
+      this.drawDragTiles(drag, bx, by, tw, th, gx, gy, br, s, multipliers);
     } else {
-      this.drawStaticTiles(grid, anim, bx, by, tw, th, gx, gy, br, s);
+      this.drawStaticTiles(grid, anim, bx, by, tw, th, gx, gy, br, s, multipliers);
     }
 
     // ── Mix mode UI ──────────────────────────────────────
@@ -516,6 +517,7 @@ export class Renderer {
     tw: number, th: number,
     gx: number, gy: number,
     br: number, s: number,
+    multipliers?: number[][] | null,
   ): void {
     for (let r = 0; r < SIZES.gridSize; r++) {
       for (let c = 0; c < SIZES.gridSize; c++) {
@@ -564,6 +566,12 @@ export class Renderer {
 
         this.drawTile(x, y, tw, th, br, s, val, tileScale, alpha);
 
+        // Draw catalyst mix multiplier badge (top-left corner)
+        const mult = multipliers?.[r]?.[c] ?? 0;
+        if (mult > 0) {
+          this.drawMultiplierBadge(x, y, tw, s, mult);
+        }
+
         // Draw merge direction indicators based on grid neighbours
         const indicators = this.getMergeIndicators(grid, r, c);
         this.drawMergeIndicators(x, y, tw, th, s, indicators);
@@ -580,6 +588,7 @@ export class Renderer {
     tw: number, th: number,
     gx: number, gy: number,
     br: number, s: number,
+    multipliers?: number[][] | null,
   ): void {
     const preview = drag.preview!;
     const progress = drag.progress;
@@ -602,6 +611,8 @@ export class Renderer {
         const x = bx + tp.fromCol * (tw + gx) + offsetX;
         const y = by + tp.fromRow * (th + gy) + offsetY;
         this.drawTile(x, y, tw, th, br, s, tp.value, 1, 1);
+        const mult = multipliers?.[tp.fromRow]?.[tp.fromCol] ?? 0;
+        if (mult > 0) this.drawMultiplierBadge(x, y, tw, s, mult);
         const indicators = this.getMergeIndicators(virtualGrid, tp.fromRow, tp.fromCol);
         this.drawMergeIndicators(x, y, tw, th, s, indicators);
       }
@@ -621,6 +632,8 @@ export class Renderer {
       const x = bx + tp.fromCol * (tw + gx);
       const y = by + tp.fromRow * (th + gy);
       this.drawTile(x, y, tw, th, br, s, tp.value, 1, 1);
+      const mult = multipliers?.[tp.fromRow]?.[tp.fromCol] ?? 0;
+      if (mult > 0) this.drawMultiplierBadge(x, y, tw, s, mult);
       const indicators = this.getMergeIndicators(virtualGrid, tp.fromRow, tp.fromCol);
       this.drawMergeIndicators(x, y, tw, th, s, indicators);
     }
@@ -636,6 +649,8 @@ export class Renderer {
       const y = fromY + (toY - fromY) * progress;
 
       this.drawTile(x, y, tw, th, br, s, tp.value, 1, 1);
+      const mult = multipliers?.[tp.fromRow]?.[tp.fromCol] ?? 0;
+      if (mult > 0) this.drawMultiplierBadge(x, y, tw, s, mult);
       const indicators = this.getMergeIndicators(virtualGrid, tp.fromRow, tp.fromCol);
       this.drawMergeIndicators(x, y, tw, th, s, indicators);
     }
@@ -907,6 +922,42 @@ export class Renderer {
         ix += lineL + gap;
       }
     }
+  }
+
+  /**
+   * Draw a catalyst mix multiplier badge ("2x", "4x", etc.) in the top-left
+   * corner of a tile.
+   */
+  private drawMultiplierBadge(
+    x: number, y: number,
+    w: number, s: number,
+    multiplier: number,
+  ): void {
+    const ctx = this.ctx;
+    const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    const text = `${multiplier}x`;
+    const fontSize = 9 * s;
+    const padX = 4 * s;
+    const padY = 2 * s;
+
+    ctx.font = `bold ${fontSize}px ${font}`;
+    const textWidth = ctx.measureText(text).width;
+    const badgeW = textWidth + padX * 2;
+    const badgeH = fontSize + padY * 2;
+    const badgeX = x + 3 * s;
+    const badgeY = y + 3 * s;
+    const badgeR = badgeH / 2;
+
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    this.roundRect(badgeX, badgeY, badgeW, badgeH, badgeR, '#FFD700');
+    ctx.restore();
+
+    ctx.fillStyle = '#000000';
+    ctx.font = `bold ${fontSize}px ${font}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, badgeX + badgeW / 2, badgeY + badgeH / 2);
   }
 
   /**

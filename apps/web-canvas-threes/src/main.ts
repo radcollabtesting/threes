@@ -11,7 +11,7 @@
  * Touch/mouse: drag to preview, release past 50% to commit.
  */
 
-import { ThreesGame, cloneGrid, scoreGrid, tileHex, type Direction, type MoveEvent } from '@threes/game-logic';
+import { ThreesGame, cloneGrid, scoreGridWithMultipliers, tileHex, type Direction, type MoveEvent } from '@threes/game-logic';
 import { Renderer } from './renderer';
 import type { GameOverData, TutorialRenderInfo } from './renderer';
 import {
@@ -73,9 +73,10 @@ let game = new ThreesGame({ seed, fixtureMode, nextTileStrategy, scoringEnabled 
 let gameOverData: GameOverData | null = null;
 let tutorial: TutorialState | null = null;
 const mixState: MixState = createMixState();
+let multiplierSnapshot: number[][] | null = null;
 
 function onGameOver(): void {
-  const finalScore = scoreGrid(game.grid);
+  const finalScore = scoreGridWithMultipliers(game.grid, game.multipliers);
   const { scores, newIndex } = saveScore(finalScore);
   // Sort scores descending; track the current game's entry by reference
   const currentEntry = scores[newIndex];
@@ -193,6 +194,7 @@ function handleDragStart(x: number, y: number): void {
   drag.currentX = x;
   drag.currentY = y;
   drag.gridSnapshot = cloneGrid(game.grid);
+  multiplierSnapshot = game.multipliers;
 }
 
 /**
@@ -410,6 +412,7 @@ function loop(now: number): void {
     );
   } else {
     const displayGrid = drag.gridSnapshot ?? game.grid;
+    const displayMult = drag.gridSnapshot ? multiplierSnapshot : game.multipliers;
 
     renderer.render(
       displayGrid,
@@ -421,6 +424,7 @@ function loop(now: number): void {
       game.score,
       null,
       mixState,
+      displayMult,
     );
   }
 

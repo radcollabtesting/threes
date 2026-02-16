@@ -5,7 +5,7 @@ export { applyMove, isValidMove, hasAnyValidMove, directionDelta } from './move'
 export { canMerge, mergeResult } from './merge';
 export { selectSpawnPosition, getSpawnEdgeCells } from './spawn';
 export { createNextTileGenerator } from './next-tile';
-export { scoreTile, scoreGrid } from './score';
+export { scoreTile, scoreGrid, scoreGridWithMultipliers } from './score';
 export {
   createEmptyGrid,
   cloneGrid,
@@ -20,6 +20,7 @@ export {
   getValidMixTargets,
   canCatalystMix,
   applyCatalystMix,
+  hasValidCatalystMix,
   getAdjacentPositions,
 } from './catalyst-mix';
 

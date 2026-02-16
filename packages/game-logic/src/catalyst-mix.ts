@@ -2,10 +2,12 @@
  * Catalyst mix: sacrifice a Gray tile to blend two adjacent tiles.
  *
  * The Gray tile is consumed; the two selected neighbors are removed
- * and their blended result (with +1 bonus dot) replaces the Gray.
+ * and their blended result replaces the Gray. A separate multiplier
+ * grid tracks scoring bonuses (+2x per catalyst mix).
  *
  * Mix table maps (colorIdx1, colorIdx2) → resultColorIdx.
  * Order-independent: mix(A,B) === mix(B,A).
+ * Same-color mixes use the standard merge map (next tier).
  */
 
 import type { CellValue, Grid, Position, MoveEvent } from './types';
@@ -22,11 +24,25 @@ import {
   GRAY_IDX,
   BROWN_IDX,
   tileColorIndex,
-  tileDots,
   encodeTile,
 } from './color';
 
-/* ── Mix lookup table ─────────────────────────────────── */
+/* ── Merge map (same-color → next tier) ──────────────── */
+
+const SAME_COLOR_MAP: Record<number, number> = {
+  [CYAN_IDX]: BLUE_IDX,
+  [MAGENTA_IDX]: RED_IDX,
+  [YELLOW_IDX]: GREEN_IDX,
+  [BLUE_IDX]: INDIGO_IDX,
+  [RED_IDX]: ORANGE_IDX,
+  [GREEN_IDX]: TEAL_IDX,
+  [ORANGE_IDX]: GRAY_IDX,
+  [TEAL_IDX]: GRAY_IDX,
+  [INDIGO_IDX]: GRAY_IDX,
+  [BROWN_IDX]: GRAY_IDX,
+};
+
+/* ── Cross-color mix lookup table ─────────────────────── */
 
 /** Key: "min,max" of two color indices → result color index */
 const MIX_TABLE = new Map<string, number>();
@@ -96,9 +112,16 @@ function isAdjacent(a: Position, b: Position): boolean {
 
 /**
  * Looks up the catalyst mix result for two color indices.
+ * Same-color mixes use the merge map (next tier).
+ * Cross-color mixes use the mix table.
  * Returns the result color index, or -1 if the combo is not in the table.
  */
 export function catalystMixColorResult(ci1: number, ci2: number): number {
+  // Same-color: use standard merge progression
+  if (ci1 === ci2) {
+    return SAME_COLOR_MAP[ci1] ?? -1;
+  }
+  // Cross-color: look up mix table
   const key = ci1 < ci2 ? `${ci1},${ci2}` : `${ci2},${ci1}`;
   return MIX_TABLE.get(key) ?? -1;
 }
@@ -142,9 +165,37 @@ export function canCatalystMix(
 }
 
 /**
+ * Checks whether any Gray tile on the board has a valid catalyst mix available.
+ * Used to prevent premature game-over when a mix could clear board space.
+ */
+export function hasValidCatalystMix(grid: Grid): boolean {
+  const gridSize = grid.length;
+  for (let r = 0; r < gridSize; r++) {
+    for (let c = 0; c < gridSize; c++) {
+      const val = grid[r][c];
+      if (val === 0 || tileColorIndex(val) !== GRAY_IDX) continue;
+
+      const grayPos: Position = { row: r, col: c };
+      const targets = getValidMixTargets(grid, grayPos);
+      if (targets.length < 2) continue;
+
+      // Check if any pair of targets can mix
+      for (let i = 0; i < targets.length; i++) {
+        for (let j = i + 1; j < targets.length; j++) {
+          const ci1 = tileColorIndex(grid[targets[i].row][targets[i].col]);
+          const ci2 = tileColorIndex(grid[targets[j].row][targets[j].col]);
+          if (catalystMixColorResult(ci1, ci2) !== -1) return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Executes a catalyst mix on the grid (mutates in place).
  *
- * @returns The resulting tile value (with +1 bonus dot) and animation events,
+ * @returns The resulting tile value and animation events,
  *          or null if the mix is invalid.
  */
 export function applyCatalystMix(
@@ -163,8 +214,8 @@ export function applyCatalystMix(
   const resultColor = catalystMixColorResult(ci1, ci2);
   if (resultColor === -1) return null;
 
-  // Catalyst-mixed tiles get +1 bonus dot for higher scoring
-  const resultValue = encodeTile(resultColor, 1);
+  // Result tile has dots=0 so it merges normally with other tiles
+  const resultValue = encodeTile(resultColor, 0);
 
   // Clear source tiles and Gray, place result at Gray position
   grid[src1.row][src1.col] = 0;
