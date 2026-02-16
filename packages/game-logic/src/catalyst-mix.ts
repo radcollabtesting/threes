@@ -24,6 +24,7 @@ import {
   GRAY_IDX,
   BROWN_IDX,
   tileColorIndex,
+  tileDots,
   encodeTile,
 } from './color';
 
@@ -183,6 +184,7 @@ export function canCatalystMix(
 /**
  * Checks whether any Gray tile on the board has a valid catalyst mix available.
  * Used to prevent premature game-over when a mix could clear board space.
+ * Only white Gray tiles (dots >= 2) can perform catalyst mixes.
  */
 export function hasValidCatalystMix(grid: Grid): boolean {
   const gridSize = grid.length;
@@ -190,6 +192,7 @@ export function hasValidCatalystMix(grid: Grid): boolean {
     for (let c = 0; c < gridSize; c++) {
       const val = grid[r][c];
       if (val === 0 || tileColorIndex(val) !== GRAY_IDX) continue;
+      if (tileDots(val) < 2) continue;
 
       const grayPos: Position = { row: r, col: c };
       const targets = getValidMixTargets(grid, grayPos);
@@ -211,10 +214,12 @@ export function hasValidCatalystMix(grid: Grid): boolean {
 /**
  * Checks whether a specific Gray tile has at least one valid catalyst mix.
  * Used to decide whether to enable/disable the Mix button on that tile.
+ * Only white Gray tiles (dots >= 2) can perform catalyst mixes.
  */
 export function grayHasValidMix(grid: Grid, grayPos: Position): boolean {
   const val = grid[grayPos.row]?.[grayPos.col];
   if (!val || tileColorIndex(val) !== GRAY_IDX) return false;
+  if (tileDots(val) < 2) return false;
 
   const targets = getValidMixTargets(grid, grayPos);
   if (targets.length < 2) return false;

@@ -324,18 +324,16 @@ describe('tileHex', () => {
     expect(tileHex(r0)).toBe(tileHex(r3));
   });
 
-  test('Gray hex darkens with each merge', () => {
-    // Fresh gray (0 dots) is lightest
-    expect(tileHex(encodeTile(GRAY_IDX, 0))).toBe('#b0b0b0');
-    // Each merge gets darker
-    expect(tileHex(encodeTile(GRAY_IDX, 1))).toBe('#969696');
-    expect(tileHex(encodeTile(GRAY_IDX, 2))).toBe('#7c7c7c');
-    expect(tileHex(encodeTile(GRAY_IDX, 3))).toBe('#626262');
-    expect(tileHex(encodeTile(GRAY_IDX, 4))).toBe('#484848');
-    expect(tileHex(encodeTile(GRAY_IDX, 5))).toBe('#2e2e2e');
-    // Clamps at near-black
-    expect(tileHex(encodeTile(GRAY_IDX, 6))).toBe('#2e2e2e');
-    expect(tileHex(encodeTile(GRAY_IDX, 10))).toBe('#2e2e2e');
+  test('Gray hex lightens with each merge (dark → light → white)', () => {
+    // Fresh gray (0 dots) is darkest
+    expect(tileHex(encodeTile(GRAY_IDX, 0))).toBe('#404040');
+    // Each merge gets lighter
+    expect(tileHex(encodeTile(GRAY_IDX, 1))).toBe('#989898');
+    // dots 2 = white (mix unlocked)
+    expect(tileHex(encodeTile(GRAY_IDX, 2))).toBe('#f0f0f0');
+    // Clamps at near-white
+    expect(tileHex(encodeTile(GRAY_IDX, 3))).toBe('#f0f0f0');
+    expect(tileHex(encodeTile(GRAY_IDX, 10))).toBe('#f0f0f0');
   });
 });
 
