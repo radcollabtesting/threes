@@ -52,6 +52,11 @@ function addMix(a: number, b: number, result: number): void {
   MIX_TABLE.set(key, result);
 }
 
+// Base (C/M/Y) cross-mixes
+addMix(CYAN_IDX, MAGENTA_IDX, BLUE_IDX);
+addMix(MAGENTA_IDX, YELLOW_IDX, RED_IDX);
+addMix(YELLOW_IDX, CYAN_IDX, GREEN_IDX);
+
 // Red (4) + base
 addMix(RED_IDX, CYAN_IDX, BROWN_IDX);
 addMix(RED_IDX, MAGENTA_IDX, INDIGO_IDX);
