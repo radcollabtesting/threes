@@ -101,27 +101,25 @@ HEX_MAP[YELLOW_IDX] = '#ffd654';
 HEX_MAP[BLUE_IDX] = '#5476ff';
 HEX_MAP[RED_IDX] = '#ff5468';
 HEX_MAP[GREEN_IDX] = '#68ff54';
-HEX_MAP[ORANGE_IDX] = '#e87830';
+HEX_MAP[ORANGE_IDX] = '#ee9a57';
 HEX_MAP[VIOLET_IDX] = '#b454ff';
 HEX_MAP[CHARTREUSE_IDX] = '#c8ff54';
 HEX_MAP[TEAL_IDX] = '#2db890';
 HEX_MAP[TURQUOISE_IDX] = '#54b4ff';
 HEX_MAP[INDIGO_IDX] = '#8054ff';
-// Gray uses a dynamic scale — see grayHex() below.
+// Gray uses a dynamic scale (dark → light → white) — see grayHex() below.
 // HEX_MAP[GRAY_IDX] is intentionally left unset.
 HEX_MAP[BROWN_IDX] = '#A0522D';
 
 /**
- * Returns a gray hex that darkens with each merge.
- * Starts light (#B0B0B0) and steps down ~26 per merge, clamped at #2E2E2E.
+ * Returns a gray hex that lightens with each merge.
+ *   dots 0 → dark gray  (#616161)
+ *   dots 1 → mid gray   (#b1b1b1)
+ *   dots 2+ → white     (#FFFFFF)
  */
+const GRAY_STEPS = ['#616161', '#b1b1b1', '#FFFFFF'];
 function grayHex(dots: number): string {
-  const start = 0xB0; // 176 — light gray
-  const floor = 0x2E; //  46 — near black
-  const step = 26;
-  const v = Math.max(floor, start - dots * step);
-  const h = v.toString(16).padStart(2, '0');
-  return `#${h}${h}${h}`;
+  return GRAY_STEPS[Math.min(dots, GRAY_STEPS.length - 1)];
 }
 
 export function tileHex(id: CellValue): string {
@@ -154,11 +152,17 @@ LABEL_MAP[ORANGE_IDX] = 'O';
 LABEL_MAP[VIOLET_IDX] = 'V';
 LABEL_MAP[INDIGO_IDX] = 'I';
 LABEL_MAP[TEAL_IDX] = 'T';
+LABEL_MAP[BROWN_IDX] = 'Br';
 
-/** Returns single-letter label for named colors, null otherwise. */
+/** Gray labels by dots: dark → mid → (white has no label, shows Mix instead). */
+const GRAY_LABEL = ['Dk', 'Md'];
+
+/** Returns short label for named colors, null otherwise. */
 export function tileLabel(id: CellValue): string | null {
   if (id === 0) return null;
-  return LABEL_MAP[tileColorIndex(id)] ?? null;
+  const ci = tileColorIndex(id);
+  if (ci === GRAY_IDX) return GRAY_LABEL[tileDots(id)] ?? null;
+  return LABEL_MAP[ci] ?? null;
 }
 
 /* ── Deterministic merge map: color → result color ──── */

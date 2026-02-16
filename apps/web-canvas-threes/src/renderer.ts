@@ -5,7 +5,7 @@
  * Tile colors are computed dynamically from the color encoding system.
  */
 
-import { scoreTile, tileHex, tileTextColor, tileLabel, tileDisplayDots, getMergePartners, encodeTile, canMerge, tileColorIndex, mergeResult, GRAY_IDX, grayHasValidMix, type CellValue, type Grid, type Direction, type Position } from '@threes/game-logic';
+import { scoreTile, tileHex, tileTextColor, tileLabel, tileDisplayDots, getMergePartners, encodeTile, canMerge, tileColorIndex, tileDots, mergeResult, GRAY_IDX, grayHasValidMix, type CellValue, type Grid, type Direction, type Position } from '@threes/game-logic';
 import { COLORS, SIZES, BOARD, ANIMATION, BUTTON, SCORE_LIST } from '@threes/design-tokens';
 import type { AnimState } from './animation';
 import type { DragState, TilePreview } from './drag';
@@ -1089,28 +1089,30 @@ export class Renderer {
         const val = grid[r][c];
         if (val === 0) continue;
         if (tileColorIndex(val) !== GRAY_IDX) continue;
+        // Only show Mix button on white Gray tiles (dots >= 2)
+        if (tileDots(val) < 2) continue;
 
         const hasValidMix = grayHasValidMix(grid, { row: r, col: c });
 
-        // Position Mix button at bottom center of tile
+        // Position Mix button centered on tile
         const tileX = bx + c * (tw + gx);
         const tileY = by + r * (th + gy);
         const btnW = 36 * s;
         const btnH = 18 * s;
         const btnX = tileX + (tw - btnW) / 2;
-        const btnY = tileY + th - btnH - 6 * s;
+        const btnY = tileY + (th - btnH) / 2;
         const btnR = btnH / 2;
 
         // Pill background (faded when disabled)
         ctx.save();
         ctx.globalAlpha = hasValidMix ? 0.9 : 0.3;
-        this.roundRect(btnX, btnY, btnW, btnH, btnR, '#FFFFFF');
+        this.roundRect(btnX, btnY, btnW, btnH, btnR, '#000000');
         ctx.restore();
 
         // "Mix" text (faded when disabled)
         ctx.save();
         ctx.globalAlpha = hasValidMix ? 1 : 0.4;
-        ctx.fillStyle = '#000000';
+        ctx.fillStyle = '#FFFFFF';
         ctx.font = `bold ${10 * s}px ${font}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';

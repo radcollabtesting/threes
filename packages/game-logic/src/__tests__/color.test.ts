@@ -27,6 +27,7 @@ import {
   TEAL_IDX,
   INDIGO_IDX,
   GRAY_IDX,
+  BROWN_IDX,
   NUM_COLORS,
 } from '../color';
 
@@ -324,18 +325,16 @@ describe('tileHex', () => {
     expect(tileHex(r0)).toBe(tileHex(r3));
   });
 
-  test('Gray hex darkens with each merge', () => {
-    // Fresh gray (0 dots) is lightest
-    expect(tileHex(encodeTile(GRAY_IDX, 0))).toBe('#b0b0b0');
-    // Each merge gets darker
-    expect(tileHex(encodeTile(GRAY_IDX, 1))).toBe('#969696');
-    expect(tileHex(encodeTile(GRAY_IDX, 2))).toBe('#7c7c7c');
-    expect(tileHex(encodeTile(GRAY_IDX, 3))).toBe('#626262');
-    expect(tileHex(encodeTile(GRAY_IDX, 4))).toBe('#484848');
-    expect(tileHex(encodeTile(GRAY_IDX, 5))).toBe('#2e2e2e');
-    // Clamps at near-black
-    expect(tileHex(encodeTile(GRAY_IDX, 6))).toBe('#2e2e2e');
-    expect(tileHex(encodeTile(GRAY_IDX, 10))).toBe('#2e2e2e');
+  test('Gray hex lightens with each merge (dark → mid → white)', () => {
+    // Fresh gray (0 dots) is dark
+    expect(tileHex(encodeTile(GRAY_IDX, 0))).toBe('#616161');
+    // Each merge gets lighter
+    expect(tileHex(encodeTile(GRAY_IDX, 1))).toBe('#b1b1b1');
+    // dots 2 = white (mix unlocked)
+    expect(tileHex(encodeTile(GRAY_IDX, 2))).toBe('#FFFFFF');
+    // Clamps at white
+    expect(tileHex(encodeTile(GRAY_IDX, 3))).toBe('#FFFFFF');
+    expect(tileHex(encodeTile(GRAY_IDX, 10))).toBe('#FFFFFF');
   });
 });
 
@@ -374,8 +373,14 @@ describe('tileLabel', () => {
     expect(tileLabel(r2)).toBe('R');
   });
 
-  test('Gray has no label', () => {
-    expect(tileLabel(encodeTile(GRAY_IDX, 0))).toBeNull();
+  test('Gray labels by level: Dk, Md, then null for white', () => {
+    expect(tileLabel(encodeTile(GRAY_IDX, 0))).toBe('Dk');
+    expect(tileLabel(encodeTile(GRAY_IDX, 1))).toBe('Md');
+    expect(tileLabel(encodeTile(GRAY_IDX, 2))).toBeNull();
+  });
+
+  test('Brown label is Br', () => {
+    expect(tileLabel(encodeTile(BROWN_IDX, 0))).toBe('Br');
   });
 });
 
