@@ -95,21 +95,21 @@ export function tileDisplayDots(id: CellValue): number {
 /* ── Display: hex colors ─────────────────────────────── */
 
 const HEX_MAP: string[] = [];
-HEX_MAP[CYAN_IDX] = '#53ffec';
-HEX_MAP[MAGENTA_IDX] = '#e854ff';
-HEX_MAP[YELLOW_IDX] = '#ffd654';
-HEX_MAP[BLUE_IDX] = '#5476ff';
-HEX_MAP[RED_IDX] = '#ff5468';
-HEX_MAP[GREEN_IDX] = '#68ff54';
-HEX_MAP[ORANGE_IDX] = '#ee9a57';
-HEX_MAP[VIOLET_IDX] = '#b454ff';
-HEX_MAP[CHARTREUSE_IDX] = '#c8ff54';
-HEX_MAP[TEAL_IDX] = '#2db890';
-HEX_MAP[TURQUOISE_IDX] = '#54b4ff';
-HEX_MAP[INDIGO_IDX] = '#8054ff';
+HEX_MAP[CYAN_IDX] = '#87FBE9';
+HEX_MAP[MAGENTA_IDX] = '#CA4DF2';
+HEX_MAP[YELLOW_IDX] = '#F4CF5F';
+HEX_MAP[BLUE_IDX] = '#5764F5';
+HEX_MAP[RED_IDX] = '#EB5560';
+HEX_MAP[GREEN_IDX] = '#77D054';
+HEX_MAP[ORANGE_IDX] = '#E98028';
+HEX_MAP[VIOLET_IDX] = '#CA4DF2';
+HEX_MAP[CHARTREUSE_IDX] = '#77D054';
+HEX_MAP[TEAL_IDX] = '#58AC91';
+HEX_MAP[TURQUOISE_IDX] = '#5764F5';
+HEX_MAP[INDIGO_IDX] = '#964EF5';
 // Gray uses a dynamic scale (dark → light → white) — see grayHex() below.
 // HEX_MAP[GRAY_IDX] is intentionally left unset.
-HEX_MAP[BROWN_IDX] = '#A0522D';
+HEX_MAP[BROWN_IDX] = '#995037';
 
 /**
  * Returns a gray hex that lightens with each merge.

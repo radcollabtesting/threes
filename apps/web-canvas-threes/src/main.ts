@@ -373,6 +373,38 @@ cbCheck.addEventListener('change', () => {
   localStorage.setItem('colorBlindMode', cbCheck.checked ? '1' : '0');
 });
 
+/* ── Dark / Light mode toggle (persisted to localStorage) ── */
+
+const themeCheck = document.getElementById('theme-check') as HTMLInputElement;
+
+function applyDarkMode(dark: boolean): void {
+  renderer.darkMode = dark;
+  themeCheck.checked = dark;
+  document.body.classList.toggle('light-mode', !dark);
+}
+
+// Determine initial state: stored preference > device preference
+const storedTheme = localStorage.getItem('darkMode');
+if (storedTheme !== null) {
+  applyDarkMode(storedTheme === '1');
+} else {
+  // Default to device's color scheme preference
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  applyDarkMode(prefersDark);
+}
+
+themeCheck.addEventListener('change', () => {
+  applyDarkMode(themeCheck.checked);
+  localStorage.setItem('darkMode', themeCheck.checked ? '1' : '0');
+});
+
+// Listen for device preference changes (only if user hasn't manually overridden)
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+  if (localStorage.getItem('darkMode') === null) {
+    applyDarkMode(e.matches);
+  }
+});
+
 /* ── Resize ────────────────────────────────────────────── */
 
 window.addEventListener('resize', () => renderer.resize());

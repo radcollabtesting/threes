@@ -6,7 +6,7 @@
  */
 
 import { scoreTile, tileHex, tileTextColor, tileLabel, tileDisplayDots, getMergePartners, encodeTile, canMerge, tileColorIndex, tileDots, mergeResult, GRAY_IDX, grayHasValidMix, type CellValue, type Grid, type Direction, type Position } from '@threes/game-logic';
-import { COLORS, SIZES, BOARD, ANIMATION, BUTTON, SCORE_LIST } from '@threes/design-tokens';
+import { COLORS, SIZES, BOARD, ANIMATION, BUTTON, SCORE_LIST, DARK_THEME, LIGHT_THEME, type ThemeColors } from '@threes/design-tokens';
 import type { AnimState } from './animation';
 import type { DragState, TilePreview } from './drag';
 import type { ScoreEntry } from './score-history';
@@ -52,6 +52,14 @@ export class Renderer {
 
   /** When true, color letter labels are shown on tiles. */
   colorBlindMode = false;
+
+  /** When true, uses dark theme; when false, uses light theme. */
+  darkMode = true;
+
+  /** Returns the active theme colors based on darkMode setting. */
+  get theme(): ThemeColors {
+    return this.darkMode ? DARK_THEME : LIGHT_THEME;
+  }
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -178,20 +186,21 @@ export class Renderer {
     const vh = this.canvas.height / (window.devicePixelRatio || 1);
 
     // ── Background ────────────────────────────────────────
-    ctx.fillStyle = COLORS.background;
+    const theme = this.theme;
+    ctx.fillStyle = theme.background;
     ctx.fillRect(0, 0, vw, vh);
 
     // ── Tutorial header or score display ──────────────────
     if (tutorialInfo) {
       const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-      ctx.fillStyle = '#FFFFFF';
+      ctx.fillStyle = theme.uiText;
       ctx.font = `bold ${16 * s}px ${font}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
       ctx.fillText(tutorialInfo.headerText, vw / 2, this._boardY - 12 * s);
     } else if (currentScore !== undefined) {
       const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-      ctx.fillStyle = COLORS.scoreText;
+      ctx.fillStyle = theme.scoreText;
       ctx.font = `bold ${20 * s}px ${font}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -242,7 +251,7 @@ export class Renderer {
       for (let c = 0; c < SIZES.gridSize; c++) {
         const x = bx + c * (tw + gx);
         const y = by + r * (th + gy);
-        this.roundRect(x, y, tw, th, br, COLORS.emptyCellSlot);
+        this.roundRect(x, y, tw, th, br, theme.emptyCellSlot);
       }
     }
 
@@ -266,14 +275,14 @@ export class Renderer {
       if (mixActive && mixState) {
         // Draw mix prompt text above board
         const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-        ctx.fillStyle = '#FFFFFF';
+        ctx.fillStyle = theme.uiText;
         ctx.font = `bold ${16 * s}px ${font}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
         ctx.fillText(mixState.promptText, vw / 2, this._boardY - 12 * s);
 
         // Dim the entire board, then brighten valid targets
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillStyle = theme.mixOverlay;
         ctx.fillRect(bx, by, BOARD.width * s, BOARD.height * s);
 
         if (mixState.phase === 'previewing' && mixState.grayPos && mixState.previewResultValue !== null) {
@@ -390,7 +399,7 @@ export class Renderer {
 
       // ── "next" label ──────────────────────────────────────
       const labelY = nextY + th + SIZES.nextLabelGap * s;
-      ctx.fillStyle = COLORS.nextLabelText;
+      ctx.fillStyle = theme.nextLabelText;
       ctx.font = `${SIZES.nextLabelFontSize * s}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
@@ -422,7 +431,7 @@ export class Renderer {
     this._newGameBtnBounds = null;
 
     if (gameOver) {
-      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillStyle = theme.overlayBackground;
       ctx.fillRect(0, 0, vw, vh);
 
       // ── Per-tile score labels ────────────────────────────
@@ -743,9 +752,9 @@ export class Renderer {
         // Fill with rounded rect matching card style
         this.roundRect(overlapLeft, overlapTop, ow, oh, overlapBr, resultColor);
 
-        // Draw 2px black border
+        // Draw 2px border
         const borderW = 2 * s;
-        ctx.strokeStyle = '#000000';
+        ctx.strokeStyle = this.theme.tileBorder;
         ctx.lineWidth = borderW;
         ctx.beginPath();
         ctx.moveTo(overlapLeft + overlapBr, overlapTop);
@@ -802,9 +811,9 @@ export class Renderer {
 
     this.roundRect(x, y, w, h, r, fill);
 
-    // Draw 2px black border
+    // Draw 2px border
     const borderW = 2 * s;
-    ctx.strokeStyle = '#000000';
+    ctx.strokeStyle = this.theme.tileBorder;
     ctx.lineWidth = borderW;
     ctx.beginPath();
     ctx.moveTo(x + r, y);

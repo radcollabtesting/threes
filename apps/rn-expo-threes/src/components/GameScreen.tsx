@@ -14,9 +14,10 @@ import {
   TouchableOpacity,
   Switch,
   useWindowDimensions,
+  useColorScheme,
   StyleSheet,
 } from 'react-native';
-import { COLORS, SIZES, BOARD } from '@threes/design-tokens';
+import { COLORS, SIZES, BOARD, DARK_THEME, LIGHT_THEME, type ThemeColors } from '@threes/design-tokens';
 import type { Direction } from '@threes/game-logic';
 import { Board } from './Board';
 import { NextTilePreview } from './NextTilePreview';
@@ -54,6 +55,11 @@ export function GameScreen() {
   // Color blind mode: when true, letter labels shown on tiles
   const [colorBlindMode, setColorBlindMode] = useState(true);
 
+  // Dark mode: defaults to device color scheme
+  const deviceScheme = useColorScheme();
+  const [darkMode, setDarkMode] = useState(deviceScheme !== 'light');
+  const theme = darkMode ? DARK_THEME : LIGHT_THEME;
+
   const handleSwipe = useCallback((dir: Direction) => {
     const ok = move(dir);
     if (!ok) {
@@ -64,21 +70,32 @@ export function GameScreen() {
   const panHandlers = useSwipeGesture(handleSwipe);
 
   return (
-    <View style={styles.root} {...panHandlers}>
-      {/* Color blind mode toggle */}
-      <View style={[styles.cbToggle, { marginTop: 8 }]}>
-        <Switch
-          value={colorBlindMode}
-          onValueChange={setColorBlindMode}
-          trackColor={{ false: '#555', true: '#4CAF50' }}
-          thumbColor="#FFF"
-        />
-        <Text style={styles.cbLabel}>Color Blind</Text>
+    <View style={[styles.root, { backgroundColor: theme.background }]} {...panHandlers}>
+      {/* Settings toggles */}
+      <View style={[styles.toggleGroup, { marginTop: 8 }]}>
+        <View style={[styles.cbToggle]}>
+          <Switch
+            value={colorBlindMode}
+            onValueChange={setColorBlindMode}
+            trackColor={{ false: '#555', true: '#4CAF50' }}
+            thumbColor="#FFF"
+          />
+          <Text style={[styles.cbLabel, { color: theme.uiText }]}>Color Blind</Text>
+        </View>
+        <View style={[styles.cbToggle]}>
+          <Switch
+            value={darkMode}
+            onValueChange={setDarkMode}
+            trackColor={{ false: '#555', true: '#4CAF50' }}
+            thumbColor="#FFF"
+          />
+          <Text style={[styles.cbLabel, { color: theme.uiText }]}>Dark Mode</Text>
+        </View>
       </View>
 
       {/* Score display */}
       <View style={[styles.scoreWrapper, { marginTop: 30 * scale }]}>
-        <Text style={[styles.scoreText, { fontSize: 20 * scale }]}>
+        <Text style={[styles.scoreText, { fontSize: 20 * scale, color: theme.scoreText }]}>
           Score: {state.score}
         </Text>
       </View>
@@ -91,6 +108,7 @@ export function GameScreen() {
           scale={scale}
           shakeCounter={shakeCounter}
           colorBlindMode={colorBlindMode}
+          emptyCellColor={theme.emptyCellSlot}
         />
       </View>
 
@@ -99,7 +117,7 @@ export function GameScreen() {
 
       {/* Game over overlay */}
       {state.status === 'ended' && (
-        <View style={styles.overlay}>
+        <View style={[styles.overlay, { backgroundColor: theme.overlayBackground }]}>
           <Text style={[styles.gameOverText, { fontSize: 32 * scale }]}>
             Game Over
           </Text>
@@ -117,7 +135,6 @@ export function GameScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.background,
     alignItems: 'center',
   },
   boardWrapper: {
@@ -125,7 +142,6 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -145,8 +161,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scoreText: {
-    color: '#FFF',
     fontWeight: 'bold',
+  },
+  toggleGroup: {
+    alignSelf: 'flex-end',
+    gap: 4,
   },
   cbToggle: {
     flexDirection: 'row',
@@ -156,7 +175,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   cbLabel: {
-    color: '#FFF',
     fontWeight: 'bold',
     fontSize: 12,
   },
