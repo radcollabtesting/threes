@@ -282,7 +282,7 @@ export class Renderer {
         ctx.fillText(mixState.promptText, vw / 2, this._boardY - 12 * s);
 
         // Dim the entire board, then brighten valid targets
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillStyle = theme.mixOverlay;
         ctx.fillRect(bx, by, BOARD.width * s, BOARD.height * s);
 
         if (mixState.phase === 'previewing' && mixState.grayPos && mixState.previewResultValue !== null) {

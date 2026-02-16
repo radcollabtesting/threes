@@ -28,6 +28,8 @@ export interface ThemeColors {
   uiText: string;
   tileBorder: string;
   overlayBackground: string;
+  /** Semi-transparent overlay used to dim the board during mix mode */
+  mixOverlay: string;
 }
 
 export const DARK_THEME: ThemeColors = {
@@ -38,6 +40,7 @@ export const DARK_THEME: ThemeColors = {
   uiText: '#FFFFFF',
   tileBorder: '#000000',
   overlayBackground: 'rgba(0,0,0,0.7)',
+  mixOverlay: 'rgba(0,0,0,0.5)',
 };
 
 export const LIGHT_THEME: ThemeColors = {
@@ -48,6 +51,7 @@ export const LIGHT_THEME: ThemeColors = {
   uiText: '#000000',
   tileBorder: '#000000',
   overlayBackground: 'rgba(0,0,0,0.55)',
+  mixOverlay: 'rgba(255,255,255,0.6)',
 };
 
 /* ── Size tokens (baseline dp) ─────────────────────────── */
