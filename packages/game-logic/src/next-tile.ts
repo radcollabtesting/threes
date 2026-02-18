@@ -83,13 +83,14 @@ const EDGE_BIAS = 0.5;
 /**
  * PROGRESSIVE generator:
  *   Scans the board for specific colors present and only spawns those.
- *   Weights: 67% base, 17% primary (if any), 17% secondary (if any).
- *   If only primaries seen: 67% base, 33% primary.
+ *   Weights: 80% base, 10% primary (if any), 10% secondary (if any).
+ *   If only primaries seen: 80% base, 20% primary.
  *
  *   Edge-bias mercy mechanic: after selecting the tier pool, 50% of the
- *   time the generator prefers a tile that has a merge partner on one of
- *   the four board edges, giving the player a better chance of an
- *   immediate match. Falls back to uniform pick when no edge match exists.
+ *   time the generator prefers a tile that can merge with a tile on one
+ *   of the four board edges (cross-color partner), giving the player a
+ *   better chance of an immediate match. Falls back to uniform pick when
+ *   no edge match exists.
  *
  *   Always consumes exactly 3 rng calls for determinism.
  */
@@ -117,15 +118,15 @@ function createProgressiveGenerator(rng: () => number): (grid: Grid) => CellValu
     const tileRoll = rng();
 
     let pool: CellValue[];
-    if (seenPrimaries.length === 0 || tierRoll < 2 / 3) {
+    if (seenPrimaries.length === 0 || tierRoll < 0.8) {
       pool = BASE_TILES;
-    } else if (seenSecondaries.length === 0 || tierRoll < 5 / 6) {
+    } else if (seenSecondaries.length === 0 || tierRoll < 0.9) {
       pool = seenPrimaries;
     } else {
       pool = seenSecondaries;
     }
 
-    // Edge-bias: prefer tiles whose merge partner sits on a board edge
+    // Edge-bias: prefer tiles whose cross-color partner sits on a board edge
     if (biasRoll < EDGE_BIAS) {
       const edgeValues = getEdgeTileValues(grid);
       const edgeMatched = pool.filter(t =>
