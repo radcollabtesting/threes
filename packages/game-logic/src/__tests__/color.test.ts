@@ -132,25 +132,29 @@ describe('base cross-color merges: canMerge', () => {
     expect(canMerge(0, CYAN)).toBe(false);
   });
 
-  test('primary tiles can merge with themselves', () => {
+  test('different primary tiles can merge (cross-color)', () => {
     const B = encodeTile(BLUE_IDX, 0);
     const R = encodeTile(RED_IDX, 0);
     const G = encodeTile(GREEN_IDX, 0);
-    expect(canMerge(B, B)).toBe(true);
-    expect(canMerge(R, R)).toBe(true);
-    expect(canMerge(G, G)).toBe(true);
-    // But not with each other
-    expect(canMerge(R, G)).toBe(false);
-    expect(canMerge(R, B)).toBe(false);
+    expect(canMerge(B, R)).toBe(true);
+    expect(canMerge(R, G)).toBe(true);
+    expect(canMerge(B, G)).toBe(true);
+    // Same primary cannot merge
+    expect(canMerge(B, B)).toBe(false);
+    expect(canMerge(R, R)).toBe(false);
+    expect(canMerge(G, G)).toBe(false);
   });
 
-  test('secondary tiles can merge with themselves', () => {
+  test('different secondary tiles can merge (cross-color → Gray)', () => {
     const O = encodeTile(ORANGE_IDX, 0);
-    const V = encodeTile(VIOLET_IDX, 0);
-    expect(canMerge(O, O)).toBe(true);
-    expect(canMerge(V, V)).toBe(true);
-    // But not with each other
-    expect(canMerge(O, V)).toBe(false);
+    const I = encodeTile(INDIGO_IDX, 0);
+    const T = encodeTile(TEAL_IDX, 0);
+    expect(canMerge(I, O)).toBe(true);
+    expect(canMerge(O, T)).toBe(true);
+    expect(canMerge(I, T)).toBe(true);
+    // Same secondary cannot merge
+    expect(canMerge(O, O)).toBe(false);
+    expect(canMerge(I, I)).toBe(false);
   });
 
   test('Gray + Gray (same dots) can merge', () => {
@@ -186,52 +190,51 @@ describe('mergeResult: base cross-color → primary', () => {
   });
 });
 
-describe('mergeResult: tier 1 → tier 2 (deterministic)', () => {
-  test('B + B → Indigo', () => {
+describe('mergeResult: primary cross-color → secondary', () => {
+  test('B + R → Indigo', () => {
     const B = encodeTile(BLUE_IDX, 0);
-    const result = mergeResult(B, B);
+    const R = encodeTile(RED_IDX, 0);
+    const result = mergeResult(B, R);
     expect(tileColorIndex(result)).toBe(INDIGO_IDX);
     expect(tileDots(result)).toBe(0);
   });
 
-  test('R + R → Orange', () => {
+  test('R + G → Orange', () => {
     const R = encodeTile(RED_IDX, 0);
-    const result = mergeResult(R, R);
+    const G = encodeTile(GREEN_IDX, 0);
+    const result = mergeResult(R, G);
     expect(tileColorIndex(result)).toBe(ORANGE_IDX);
   });
 
-  test('G + G → Teal', () => {
+  test('B + G → Teal', () => {
+    const B = encodeTile(BLUE_IDX, 0);
     const G = encodeTile(GREEN_IDX, 0);
-    const result = mergeResult(G, G);
+    const result = mergeResult(B, G);
     expect(tileColorIndex(result)).toBe(TEAL_IDX);
   });
 });
 
-describe('mergeResult: tier 2 → Gray', () => {
-  test('O + O → Gray(0)', () => {
-    const O = encodeTile(ORANGE_IDX, 0);
-    const result = mergeResult(O, O);
-    expect(tileColorIndex(result)).toBe(GRAY_IDX);
-    expect(tileDots(result)).toBe(0);
-  });
-
-  test('V + V → Gray(0)', () => {
-    const V = encodeTile(VIOLET_IDX, 0);
-    const result = mergeResult(V, V);
-    expect(tileColorIndex(result)).toBe(GRAY_IDX);
-    expect(tileDots(result)).toBe(0);
-  });
-
-  test('I + I → Gray(0)', () => {
+describe('mergeResult: secondary cross-color → Gray', () => {
+  test('I + O → Gray(0)', () => {
     const I = encodeTile(INDIGO_IDX, 0);
-    const result = mergeResult(I, I);
+    const O = encodeTile(ORANGE_IDX, 0);
+    const result = mergeResult(I, O);
     expect(tileColorIndex(result)).toBe(GRAY_IDX);
     expect(tileDots(result)).toBe(0);
   });
 
-  test('T + T → Gray(0)', () => {
+  test('O + T → Gray(0)', () => {
+    const O = encodeTile(ORANGE_IDX, 0);
     const T = encodeTile(TEAL_IDX, 0);
-    const result = mergeResult(T, T);
+    const result = mergeResult(O, T);
+    expect(tileColorIndex(result)).toBe(GRAY_IDX);
+    expect(tileDots(result)).toBe(0);
+  });
+
+  test('I + T → Gray(0)', () => {
+    const I = encodeTile(INDIGO_IDX, 0);
+    const T = encodeTile(TEAL_IDX, 0);
+    const result = mergeResult(I, T);
     expect(tileColorIndex(result)).toBe(GRAY_IDX);
     expect(tileDots(result)).toBe(0);
   });
@@ -401,14 +404,18 @@ describe('getMergePartners', () => {
     expect(getMergePartners(YELLOW)).toEqual([CYAN_IDX, MAGENTA_IDX]);
   });
 
-  test('primary tile merges with its own color', () => {
+  test('primary tiles merge with the other two primaries', () => {
     const B = encodeTile(BLUE_IDX, 0);
-    expect(getMergePartners(B)).toEqual([BLUE_IDX]);
+    const R = encodeTile(RED_IDX, 0);
+    expect(getMergePartners(B)).toEqual(expect.arrayContaining([RED_IDX, GREEN_IDX]));
+    expect(getMergePartners(R)).toEqual(expect.arrayContaining([BLUE_IDX, GREEN_IDX]));
   });
 
-  test('secondary tile merges with its own color', () => {
+  test('secondary tiles merge with the other secondaries', () => {
     const O = encodeTile(ORANGE_IDX, 0);
-    expect(getMergePartners(O)).toEqual([ORANGE_IDX]);
+    const partners = getMergePartners(O);
+    expect(partners.length).toBeGreaterThanOrEqual(2);
+    expect(partners).not.toContain(ORANGE_IDX);
   });
 
   test('Gray merges with Gray', () => {

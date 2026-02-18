@@ -28,14 +28,25 @@ describe('merge rules (via merge.ts delegation)', () => {
     expect(canMerge(0, CYAN)).toBe(false);
   });
 
-  test('different primary colors at same tier cannot merge', () => {
+  test('primary cross-color CAN merge: B + R', () => {
+    const B = encodeTile(BLUE_IDX, 0);
     const R = encodeTile(RED_IDX, 0);
-    const G = encodeTile(GREEN_IDX, 0);
-    expect(canMerge(R, G)).toBe(false);
+    expect(canMerge(B, R)).toBe(true);
+  });
+
+  test('same primary CANNOT merge: B + B', () => {
+    const B = encodeTile(BLUE_IDX, 0);
+    expect(canMerge(B, B)).toBe(false);
+  });
+
+  test('secondary cross-color CAN merge: I + O', () => {
+    const I = encodeTile(INDIGO_IDX, 0);
+    const O = encodeTile(ORANGE_IDX, 0);
+    expect(canMerge(I, O)).toBe(true);
   });
 });
 
-describe('mergeResult — deterministic merge table', () => {
+describe('mergeResult — deterministic cross-color merge table', () => {
   test('C + M → Blue', () => {
     const result = mergeResult(CYAN, MAGENTA);
     expect(tileColorIndex(result)).toBe(BLUE_IDX);
@@ -51,44 +62,50 @@ describe('mergeResult — deterministic merge table', () => {
     expect(tileColorIndex(result)).toBe(GREEN_IDX);
   });
 
-  test('B + B → Indigo', () => {
+  test('B + R → Indigo', () => {
     const B = encodeTile(BLUE_IDX, 0);
-    const result = mergeResult(B, B);
+    const R = encodeTile(RED_IDX, 0);
+    const result = mergeResult(B, R);
     expect(tileColorIndex(result)).toBe(INDIGO_IDX);
     expect(tileDots(result)).toBe(0);
   });
 
-  test('R + R → Orange', () => {
+  test('R + G → Orange', () => {
     const R = encodeTile(RED_IDX, 0);
-    const result = mergeResult(R, R);
+    const G = encodeTile(GREEN_IDX, 0);
+    const result = mergeResult(R, G);
     expect(tileColorIndex(result)).toBe(ORANGE_IDX);
     expect(tileDots(result)).toBe(0);
   });
 
-  test('G + G → Teal', () => {
+  test('B + G → Teal', () => {
+    const B = encodeTile(BLUE_IDX, 0);
     const G = encodeTile(GREEN_IDX, 0);
-    const result = mergeResult(G, G);
+    const result = mergeResult(B, G);
     expect(tileColorIndex(result)).toBe(TEAL_IDX);
     expect(tileDots(result)).toBe(0);
   });
 
-  test('I + I → Gray', () => {
+  test('I + O → Gray', () => {
     const I = encodeTile(INDIGO_IDX, 0);
-    const result = mergeResult(I, I);
-    expect(tileColorIndex(result)).toBe(GRAY_IDX);
-    expect(tileDots(result)).toBe(0);
-  });
-
-  test('O + O → Gray', () => {
     const O = encodeTile(ORANGE_IDX, 0);
-    const result = mergeResult(O, O);
+    const result = mergeResult(I, O);
     expect(tileColorIndex(result)).toBe(GRAY_IDX);
     expect(tileDots(result)).toBe(0);
   });
 
-  test('T + T → Gray', () => {
+  test('O + T → Gray', () => {
+    const O = encodeTile(ORANGE_IDX, 0);
     const T = encodeTile(TEAL_IDX, 0);
-    const result = mergeResult(T, T);
+    const result = mergeResult(O, T);
+    expect(tileColorIndex(result)).toBe(GRAY_IDX);
+    expect(tileDots(result)).toBe(0);
+  });
+
+  test('I + T → Gray', () => {
+    const I = encodeTile(INDIGO_IDX, 0);
+    const T = encodeTile(TEAL_IDX, 0);
+    const result = mergeResult(I, T);
     expect(tileColorIndex(result)).toBe(GRAY_IDX);
     expect(tileDots(result)).toBe(0);
   });

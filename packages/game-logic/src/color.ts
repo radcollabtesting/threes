@@ -1,22 +1,21 @@
 /**
- * Named color system with cross-color and same-color merge rules.
+ * Named color system with cross-color merge rules at every tier.
  *
  * 13 named colors across 4 tiers:
  *   Tier 0 (base):      Cyan, Magenta, Yellow
  *   Tier 1 (primary):   Blue, Red, Green
- *   Tier 2 (secondary): Orange, Violet, Indigo, Teal
+ *   Tier 2 (secondary): Orange, Indigo, Teal
  *   Tier 3 (tertiary):  Gray
  *
  * Encoding: id = colorIndex + dots * NUM_COLORS + 1
  *   (0 is reserved for empty cells)
  *
- * Merge rules:
- *   Base tier uses cross-color mixing (like real color theory):
- *     Cyan + Magenta → Blue,  Magenta + Yellow → Red,  Yellow + Cyan → Green
- *   Primary tier and above use same-color matching:
- *     Blue + Blue → Indigo,  Red + Red → Orange,  Green + Green → Teal
- *     Indigo / Orange / Teal → Gray
+ * Merge rules (cross-color at each tier):
+ *   Base:      C+M → Blue,  M+Y → Red,   Y+C → Green
+ *   Primary:   B+R → Indigo, R+G → Orange, B+G → Teal
+ *   Secondary: any two different secondaries → Gray
  *   Gray + Gray (same dots) → Gray with dots + 1.
+ *   Same color never merges (except Gray+Gray).
  */
 
 import type { CellValue } from './types';
@@ -173,36 +172,33 @@ function addCross(a: number, b: number, result: number): void {
   CROSS_MERGE.set(key, result);
 }
 
-addCross(CYAN_IDX, MAGENTA_IDX, BLUE_IDX);   // C+M → B
-addCross(MAGENTA_IDX, YELLOW_IDX, RED_IDX);   // M+Y → R
-addCross(YELLOW_IDX, CYAN_IDX, GREEN_IDX);    // Y+C → G
+// Base tier: C+M→B, M+Y→R, Y+C→G
+addCross(CYAN_IDX, MAGENTA_IDX, BLUE_IDX);
+addCross(MAGENTA_IDX, YELLOW_IDX, RED_IDX);
+addCross(YELLOW_IDX, CYAN_IDX, GREEN_IDX);
+
+// Primary tier: B+R→I, R+G→O, B+G→T
+addCross(BLUE_IDX, RED_IDX, INDIGO_IDX);
+addCross(RED_IDX, GREEN_IDX, ORANGE_IDX);
+addCross(BLUE_IDX, GREEN_IDX, TEAL_IDX);
+
+// Secondary tier: any two different secondaries → Gray
+addCross(INDIGO_IDX, ORANGE_IDX, GRAY_IDX);
+addCross(ORANGE_IDX, TEAL_IDX, GRAY_IDX);
+addCross(INDIGO_IDX, TEAL_IDX, GRAY_IDX);
 
 function crossMergeResult(ciA: number, ciB: number): number | undefined {
   const key = ciA < ciB ? `${ciA},${ciB}` : `${ciB},${ciA}`;
   return CROSS_MERGE.get(key);
 }
 
-/* ── Same-color merge map (primary tier and above) ──── */
-
-const SAME_MERGE_MAP: Record<number, number> = {
-  [BLUE_IDX]: INDIGO_IDX,      // B+B → I
-  [RED_IDX]: ORANGE_IDX,       // R+R → O
-  [GREEN_IDX]: TEAL_IDX,       // G+G → T
-  [ORANGE_IDX]: GRAY_IDX,      // O+O → Gray
-  [VIOLET_IDX]: GRAY_IDX,      // V+V → Gray
-  [CHARTREUSE_IDX]: GRAY_IDX,  // Ch+Ch → Gray
-  [TEAL_IDX]: GRAY_IDX,        // T+T → Gray
-  [TURQUOISE_IDX]: GRAY_IDX,   // Tu+Tu → Gray
-  [INDIGO_IDX]: GRAY_IDX,      // I+I → Gray
-  [BROWN_IDX]: GRAY_IDX,       // Br+Br → Gray
-};
-
 /* ── Merge logic ─────────────────────────────────────── */
 
 /**
- * Two tiles can merge when:
- *   - Base tier: two different base colors with same dots (cross-color mix)
- *   - Primary+:  same color and same dots
+ * Cross-color mixing at every tier:
+ *   - Base:      two different base colors with same dots
+ *   - Primary:   two different primaries with same dots
+ *   - Secondary: two different secondaries with same dots → Gray
  *   - Gray:      same color (Gray) and same dots
  */
 export function canMerge(a: CellValue, b: CellValue): boolean {
@@ -211,19 +207,21 @@ export function canMerge(a: CellValue, b: CellValue): boolean {
   const ciB = tileColorIndex(b);
   if (tileDots(a) !== tileDots(b)) return false;
 
-  // Base cross-color merge: any two different base colors
-  if (BASE_INDICES.has(ciA) && BASE_INDICES.has(ciB)) {
-    return ciA !== ciB;
-  }
+  // Gray + Gray (same dots)
+  if (ciA === GRAY_IDX && ciB === GRAY_IDX) return true;
 
-  // Same-color merge (primary+, Gray)
-  return ciA === ciB;
+  // Cross-color merge: two different colors in the same tier
+  if (ciA === ciB) return false; // same color never merges (except Gray above)
+  if (BASE_INDICES.has(ciA) && BASE_INDICES.has(ciB)) return true;
+  if (PRIMARY_INDICES.has(ciA) && PRIMARY_INDICES.has(ciB)) return true;
+  if (SECONDARY_INDICES.has(ciA) && SECONDARY_INDICES.has(ciB)) return true;
+
+  return false;
 }
 
 /**
  * Returns the merged tile value.
- *   - Base cross-color: looks up CROSS_MERGE table
- *   - Primary+ same-color: looks up SAME_MERGE_MAP
+ *   - Cross-color: looks up CROSS_MERGE table
  *   - Gray: increments dots
  */
 export function mergeResult(a: CellValue, b: CellValue): CellValue {
@@ -236,67 +234,71 @@ export function mergeResult(a: CellValue, b: CellValue): CellValue {
     return encodeTile(GRAY_IDX, dots + 1);
   }
 
-  // Base cross-color merge
-  if (BASE_INDICES.has(ciA) && BASE_INDICES.has(ciB) && ciA !== ciB) {
-    const result = crossMergeResult(ciA, ciB);
-    if (result !== undefined) return encodeTile(result, dots);
-    return a; // fallback
-  }
+  // Cross-color merge
+  const result = crossMergeResult(ciA, ciB);
+  if (result !== undefined) return encodeTile(result, dots);
 
-  // Same-color merge (primary+)
-  const nextColor = SAME_MERGE_MAP[ciA];
-  if (nextColor === undefined) return a;
-  return encodeTile(nextColor, dots);
+  return a; // fallback
 }
 
 /* ── Next-color preview helpers ────────────────────── */
 
 /**
  * Returns the hex color of the tile that this tile becomes when merged,
- * or null if there is no next color.
- * Base tiles return null (they have two possible results; use the triangle).
+ * or null if there are multiple possible results (cross-color tiles)
+ * or no next color (Gray).
+ * Secondary tiles always produce Gray so they return gray hex.
  */
 export function tileNextHex(id: CellValue): string | null {
   if (id === 0) return null;
   const ci = tileColorIndex(id);
   if (ci === GRAY_IDX) return null;
-  if (BASE_INDICES.has(ci)) return null; // base tiles have 2 results
-  const nextColor = SAME_MERGE_MAP[ci];
-  if (nextColor === undefined) return null;
-  if (nextColor === GRAY_IDX) return grayHex(0);
-  return HEX_MAP[nextColor] ?? null;
+  // Secondary tiles always → Gray regardless of partner
+  if (SECONDARY_INDICES.has(ci)) return grayHex(0);
+  // Base and primary tiles have 2 possible results
+  return null;
 }
 
 /**
  * Returns the short label of the tile that this tile becomes when merged,
- * or null if there is no next color.
- * Base tiles return null (they have two possible results; use the triangle).
+ * or null if there are multiple possible results (cross-color tiles)
+ * or no next color (Gray).
+ * Secondary tiles always produce Gray so they return 'Gr'.
  */
 export function tileNextLabel(id: CellValue): string | null {
   if (id === 0) return null;
   const ci = tileColorIndex(id);
   if (ci === GRAY_IDX) return null;
-  if (BASE_INDICES.has(ci)) return null; // base tiles have 2 results
-  const nextColor = SAME_MERGE_MAP[ci];
-  if (nextColor === undefined) return null;
-  if (nextColor === GRAY_IDX) return 'Gr';
-  return LABEL_MAP[nextColor] ?? null;
+  // Secondary tiles always → Gray regardless of partner
+  if (SECONDARY_INDICES.has(ci)) return 'Gr';
+  // Base and primary tiles have 2 possible results
+  return null;
 }
 
 /* ── Merge partners (for hint indicators) ────────────── */
 
+/** Helper: returns the other two colors in a tier set. */
+function otherTwo(ci: number, tier: Set<number>): number[] {
+  const result: number[] = [];
+  for (const idx of tier) {
+    if (idx !== ci) result.push(idx);
+  }
+  return result;
+}
+
 /**
  * Returns color indices that this tile can merge with.
- * Base tiles return the other two base colors (cross-color merge).
- * All other tiles merge with their own color.
+ * Cross-color: returns the other colors in the same tier.
+ * Gray merges with Gray.
  */
 export function getMergePartners(id: CellValue): number[] {
   if (id === 0) return [];
   const ci = tileColorIndex(id);
-  if (ci === CYAN_IDX) return [MAGENTA_IDX, YELLOW_IDX];
-  if (ci === MAGENTA_IDX) return [CYAN_IDX, YELLOW_IDX];
-  if (ci === YELLOW_IDX) return [CYAN_IDX, MAGENTA_IDX];
-  return [ci];
+  if (ci === GRAY_IDX) return [GRAY_IDX];
+  if (BASE_INDICES.has(ci)) return otherTwo(ci, BASE_INDICES);
+  if (PRIMARY_INDICES.has(ci)) return otherTwo(ci, PRIMARY_INDICES);
+  if (SECONDARY_INDICES.has(ci)) return otherTwo(ci, SECONDARY_INDICES);
+  return [];
 }
 
 /* ── Base tile constants ─────────────────────────────── */

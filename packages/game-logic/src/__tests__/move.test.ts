@@ -97,21 +97,20 @@ describe('applyMove — merge during movement (cross-color base)', () => {
     expect(newGrid[0][2]).toBe(0);
   });
 
-  test('different primary colors block merge — tiles just slide', () => {
-    const R = encodeTile(RED_IDX, 0);
-    const G = encodeTile(GREEN_IDX, 0);
-    // R + G are different primaries, can't merge
+  test('cross-tier tiles block merge — tiles just slide', () => {
+    const B = encodeTile(BLUE_IDX, 0);
+    // C (base) + B (primary) are different tiers, can't merge
     const grid: Grid = [
-      [G, R, 0, 0],
+      [C, B, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
     ];
     const { newGrid, changed } = applyMove(grid, 'left');
-    // G is at leading edge (col 0), R can't merge with G, so nothing moves
+    // C is at leading edge (col 0), B can't merge with C, so nothing moves
     expect(changed).toBe(false);
-    expect(newGrid[0][0]).toBe(G);
-    expect(newGrid[0][1]).toBe(R);
+    expect(newGrid[0][0]).toBe(C);
+    expect(newGrid[0][1]).toBe(B);
   });
 });
 
@@ -153,39 +152,36 @@ describe('isValidMove', () => {
 
 describe('hasAnyValidMove', () => {
   test('false for a full board with no mergeable neighbors', () => {
-    // Use primary tiles alternating — different primaries can't merge
-    const R = encodeTile(RED_IDX, 0);
-    const G = encodeTile(GREEN_IDX, 0);
+    // Alternate cross-tier (C and B) so no adjacent pair can merge
+    const B = encodeTile(BLUE_IDX, 0);
     const grid: Grid = [
-      [R, G, R, G],
-      [G, R, G, R],
-      [R, G, R, G],
-      [G, R, G, R],
+      [C, B, C, B],
+      [B, C, B, C],
+      [C, B, C, B],
+      [B, C, B, C],
     ];
     expect(hasAnyValidMove(grid)).toBe(false);
   });
 
   test('true if any empty cell exists', () => {
-    const R = encodeTile(RED_IDX, 0);
-    const G = encodeTile(GREEN_IDX, 0);
+    const B = encodeTile(BLUE_IDX, 0);
     const grid: Grid = [
-      [R, G, R, G],
-      [G, R, G, R],
-      [R, G, R, G],
-      [G, R, G, 0],
+      [C, B, C, B],
+      [B, C, B, C],
+      [C, B, C, B],
+      [B, C, B, 0],
     ];
     expect(hasAnyValidMove(grid)).toBe(true);
   });
 
   test('true if a cross-color merge is possible on a full board', () => {
-    // Adjacent C + M can merge
-    const R = encodeTile(RED_IDX, 0);
-    const G = encodeTile(GREEN_IDX, 0);
+    // Adjacent C + M can merge (both base tier)
+    const B = encodeTile(BLUE_IDX, 0);
     const grid: Grid = [
-      [C, M, R, G],
-      [R, G, R, G],
-      [G, R, G, R],
-      [R, G, R, G],
+      [C, M, B, C],
+      [B, C, B, C],
+      [C, B, C, B],
+      [B, C, B, C],
     ];
     expect(hasAnyValidMove(grid)).toBe(true);
   });
