@@ -3,7 +3,7 @@
  *
  * The Gray tile is consumed; the two selected neighbors are removed
  * and their blended result replaces the Gray. A separate multiplier
- * grid tracks scoring bonuses (+2x per catalyst mix).
+ * grid tracks mix counts (each mix doubles the tile's score).
  *
  * Mix table maps (colorIdx1, colorIdx2) → resultColorIdx.
  * Order-independent: mix(A,B) === mix(B,A).

@@ -3,7 +3,7 @@ import { shuffleArray } from '@threes/rng';
 import {
   CYAN, MAGENTA, YELLOW,
   BASE_TILES,
-  tileTier, tileColorIndex, encodeTile,
+  tileTier, tileColorIndex, encodeTile, canMerge,
 } from './color';
 
 /**
@@ -62,15 +62,36 @@ function createRandomGenerator(rng: () => number): (grid: Grid) => CellValue {
 }
 
 /**
+ * Collects all tile values sitting on the four board edges.
+ */
+function getEdgeTileValues(grid: Grid): Set<CellValue> {
+  const values = new Set<CellValue>();
+  const size = grid.length;
+  if (size === 0) return values;
+  for (let i = 0; i < size; i++) {
+    if (grid[0][i] !== 0) values.add(grid[0][i]);
+    if (grid[size - 1][i] !== 0) values.add(grid[size - 1][i]);
+    if (grid[i][0] !== 0) values.add(grid[i][0]);
+    if (grid[i][size - 1] !== 0) values.add(grid[i][size - 1]);
+  }
+  return values;
+}
+
+/** Chance that the tile pick is biased toward an edge-mergeable candidate. */
+const EDGE_BIAS = 0.5;
+
+/**
  * PROGRESSIVE generator:
  *   Scans the board for specific colors present and only spawns those.
- *   - Always ≥50% chance of base (C, M, Y).
- *   - If any primary colors exist on board: remaining chance picks from
- *     only the specific primaries the player has created.
- *   - Same for secondaries.
- *   Weights: 50% base, 25% primary (if any), 25% secondary (if any).
- *   If only primaries seen: 50% base, 50% primary.
- *   Always consumes exactly 2 rng calls for determinism.
+ *   Weights: 67% base, 17% primary (if any), 17% secondary (if any).
+ *   If only primaries seen: 67% base, 33% primary.
+ *
+ *   Edge-bias mercy mechanic: after selecting the tier pool, 50% of the
+ *   time the generator prefers a tile that has a merge partner on one of
+ *   the four board edges, giving the player a better chance of an
+ *   immediate match. Falls back to uniform pick when no edge match exists.
+ *
+ *   Always consumes exactly 3 rng calls for determinism.
  */
 function createProgressiveGenerator(rng: () => number): (grid: Grid) => CellValue {
   return function nextProgressive(grid: Grid): CellValue {
@@ -90,18 +111,31 @@ function createProgressiveGenerator(rng: () => number): (grid: Grid) => CellValu
       }
     }
 
-    // Always consume two random numbers for determinism
+    // Always consume three random numbers for determinism
     const tierRoll = rng();
+    const biasRoll = rng();
     const tileRoll = rng();
 
-    if (seenPrimaries.length === 0 || tierRoll < 0.5) {
-      return BASE_TILES[Math.floor(tileRoll * BASE_TILES.length)];
+    let pool: CellValue[];
+    if (seenPrimaries.length === 0 || tierRoll < 2 / 3) {
+      pool = BASE_TILES;
+    } else if (seenSecondaries.length === 0 || tierRoll < 5 / 6) {
+      pool = seenPrimaries;
+    } else {
+      pool = seenSecondaries;
     }
 
-    if (seenSecondaries.length === 0 || tierRoll < 0.75) {
-      return seenPrimaries[Math.floor(tileRoll * seenPrimaries.length)];
+    // Edge-bias: prefer tiles whose merge partner sits on a board edge
+    if (biasRoll < EDGE_BIAS) {
+      const edgeValues = getEdgeTileValues(grid);
+      const edgeMatched = pool.filter(t =>
+        [...edgeValues].some(ev => canMerge(t, ev)),
+      );
+      if (edgeMatched.length > 0) {
+        return edgeMatched[Math.floor(tileRoll * edgeMatched.length)];
+      }
     }
 
-    return seenSecondaries[Math.floor(tileRoll * seenSecondaries.length)];
+    return pool[Math.floor(tileRoll * pool.length)];
   };
 }
