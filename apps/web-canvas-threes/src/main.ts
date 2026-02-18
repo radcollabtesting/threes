@@ -120,10 +120,10 @@ function endTutorial(): void {
 
 tutorialBtn.addEventListener('click', startTutorial);
 
-// Auto-start tutorial on first visit
-if (!localStorage.getItem('tutorialComplete')) {
-  startTutorial();
-}
+// Auto-start tutorial on first visit (disabled while tutorial is being updated)
+// if (!localStorage.getItem('tutorialComplete')) {
+//   startTutorial();
+// }
 
 /* ── Input handlers ────────────────────────────────────── */
 
