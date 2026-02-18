@@ -27,7 +27,7 @@ describe('ThreesGame', () => {
       const game = new ThreesGame({ fixtureMode: true });
       expect(game.grid).toEqual([
         [CYAN, MAGENTA, 0, YELLOW],
-        [CYAN, 0, 0, YELLOW],
+        [MAGENTA, 0, 0, CYAN],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
       ]);
@@ -53,21 +53,19 @@ describe('ThreesGame', () => {
       expect(game.nextTile).toBeGreaterThan(0);
     });
 
-    test('fixture: swipe up merges adjacent same-color tiles', () => {
+    test('fixture: swipe up merges adjacent cross-color tiles', () => {
       const game = new ThreesGame({ fixtureMode: true });
       // Board: [C, M, _, Y]
-      //        [C, _, _, Y]
-      // Swipe up: C(1,0) + C(0,0) → primary, Y(1,3) + Y(0,3) → primary
+      //        [M, _, _, C]
+      // Swipe up: C+M (col 0) → Blue, Y+C (col 3) → Green
       game.move('up');
       const g = game.grid;
-      // Col 0: two Cyans merged → a primary (tier 1)
+      // Col 0: C+M → Blue
       expect(tileTier(g[0][0])).toBe(1);
-      const ci0 = tileColorIndex(g[0][0]);
-      expect([BLUE_IDX, RED_IDX, GREEN_IDX]).toContain(ci0);
-      // Col 3: two Yellows merged → a primary (tier 1)
+      expect(tileColorIndex(g[0][0])).toBe(BLUE_IDX);
+      // Col 3: Y+C → Green
       expect(tileTier(g[0][3])).toBe(1);
-      const ci3 = tileColorIndex(g[0][3]);
-      expect([BLUE_IDX, RED_IDX, GREEN_IDX]).toContain(ci3);
+      expect(tileColorIndex(g[0][3])).toBe(GREEN_IDX);
       // Magenta stays
       expect(g[0][1]).toBe(MAGENTA);
     });

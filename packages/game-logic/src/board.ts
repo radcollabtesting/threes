@@ -36,16 +36,16 @@ const Y = YELLOW;
 /**
  * Fixture board for the color mixing game.
  *   Row 0: [C, M, _, Y]
- *   Row 1: [C, _, _, Y]
+ *   Row 1: [M, _, _, C]
  *   Row 2: [_, _, _, _]
  *   Row 3: [_, _, _, _]
  *
- * Swipe up merges C+C (col 0) and Y+Y (col 3) into random primaries.
+ * Swipe up merges C+M (col 0) → Blue, Y+C (col 3) → Green.
  */
 export function getFixtureGrid(): Grid {
   return [
     [C, M, 0, Y],
-    [C, 0, 0, Y],
+    [M, 0, 0, C],
     [0, 0, 0, 0],
     [0, 0, 0, 0],
   ];

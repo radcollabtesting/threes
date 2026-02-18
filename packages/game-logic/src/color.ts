@@ -1,5 +1,5 @@
 /**
- * Named color system with same-color merge rules.
+ * Named color system with cross-color and same-color merge rules.
  *
  * 13 named colors across 4 tiers:
  *   Tier 0 (base):      Cyan, Magenta, Yellow
@@ -10,14 +10,13 @@
  * Encoding: id = colorIndex + dots * NUM_COLORS + 1
  *   (0 is reserved for empty cells)
  *
- * Merge rules (deterministic same-color matching):
- *   - Two tiles of the same color and same dots merge.
- *   - Each color has a fixed result (carries dots):
- *     Cyan → Blue,  Magenta → Red,  Yellow → Green
- *     Blue → Indigo,  Red → Orange,  Green → Teal
+ * Merge rules:
+ *   Base tier uses cross-color mixing (like real color theory):
+ *     Cyan + Magenta → Blue,  Magenta + Yellow → Red,  Yellow + Cyan → Green
+ *   Primary tier and above use same-color matching:
+ *     Blue + Blue → Indigo,  Red + Red → Orange,  Green + Green → Teal
  *     Indigo / Orange / Teal → Gray
- *   - Gray + Gray (same dots) → Gray with dots + 1.
- *   - Different colors → blocked (canMerge returns false).
+ *   Gray + Gray (same dots) → Gray with dots + 1.
  */
 
 import type { CellValue } from './types';
@@ -165,12 +164,27 @@ export function tileLabel(id: CellValue): string | null {
   return LABEL_MAP[ci] ?? null;
 }
 
-/* ── Deterministic merge map: color → result color ──── */
+/* ── Cross-color merge map (base tier: C+M→B, M+Y→R, Y+C→G) ── */
 
-const MERGE_MAP: Record<number, number> = {
-  [CYAN_IDX]: BLUE_IDX,        // C+C → B
-  [MAGENTA_IDX]: RED_IDX,      // M+M → R
-  [YELLOW_IDX]: GREEN_IDX,     // Y+Y → G
+const CROSS_MERGE = new Map<string, number>();
+
+function addCross(a: number, b: number, result: number): void {
+  const key = a < b ? `${a},${b}` : `${b},${a}`;
+  CROSS_MERGE.set(key, result);
+}
+
+addCross(CYAN_IDX, MAGENTA_IDX, BLUE_IDX);   // C+M → B
+addCross(MAGENTA_IDX, YELLOW_IDX, RED_IDX);   // M+Y → R
+addCross(YELLOW_IDX, CYAN_IDX, GREEN_IDX);    // Y+C → G
+
+function crossMergeResult(ciA: number, ciB: number): number | undefined {
+  const key = ciA < ciB ? `${ciA},${ciB}` : `${ciB},${ciA}`;
+  return CROSS_MERGE.get(key);
+}
+
+/* ── Same-color merge map (primary tier and above) ──── */
+
+const SAME_MERGE_MAP: Record<number, number> = {
   [BLUE_IDX]: INDIGO_IDX,      // B+B → I
   [RED_IDX]: ORANGE_IDX,       // R+R → O
   [GREEN_IDX]: TEAL_IDX,       // G+G → T
@@ -186,33 +200,52 @@ const MERGE_MAP: Record<number, number> = {
 /* ── Merge logic ─────────────────────────────────────── */
 
 /**
- * Two tiles can merge if they have the same color and same dots.
- * This gives the simple "match two identical tiles" rule.
+ * Two tiles can merge when:
+ *   - Base tier: two different base colors with same dots (cross-color mix)
+ *   - Primary+:  same color and same dots
+ *   - Gray:      same color (Gray) and same dots
  */
 export function canMerge(a: CellValue, b: CellValue): boolean {
   if (a === 0 || b === 0) return false;
-  return tileColorIndex(a) === tileColorIndex(b) && tileDots(a) === tileDots(b);
+  const ciA = tileColorIndex(a);
+  const ciB = tileColorIndex(b);
+  if (tileDots(a) !== tileDots(b)) return false;
+
+  // Base cross-color merge: any two different base colors
+  if (BASE_INDICES.has(ciA) && BASE_INDICES.has(ciB)) {
+    return ciA !== ciB;
+  }
+
+  // Same-color merge (primary+, Gray)
+  return ciA === ciB;
 }
 
 /**
- * Returns the merged tile value. Fully deterministic — each color
- * has exactly one result color (see MERGE_MAP).
+ * Returns the merged tile value.
+ *   - Base cross-color: looks up CROSS_MERGE table
+ *   - Primary+ same-color: looks up SAME_MERGE_MAP
+ *   - Gray: increments dots
  */
 export function mergeResult(a: CellValue, b: CellValue): CellValue {
-  const ci = tileColorIndex(a);
+  const ciA = tileColorIndex(a);
+  const ciB = tileColorIndex(b);
   const dots = tileDots(a);
 
   // Gray + Gray (same dots) → Gray with dots + 1
-  if (ci === GRAY_IDX) {
+  if (ciA === GRAY_IDX) {
     return encodeTile(GRAY_IDX, dots + 1);
   }
 
-  const nextColor = MERGE_MAP[ci];
-  if (nextColor === undefined) {
-    // Should not reach here if canMerge was checked first
-    return a;
+  // Base cross-color merge
+  if (BASE_INDICES.has(ciA) && BASE_INDICES.has(ciB) && ciA !== ciB) {
+    const result = crossMergeResult(ciA, ciB);
+    if (result !== undefined) return encodeTile(result, dots);
+    return a; // fallback
   }
 
+  // Same-color merge (primary+)
+  const nextColor = SAME_MERGE_MAP[ciA];
+  if (nextColor === undefined) return a;
   return encodeTile(nextColor, dots);
 }
 
@@ -220,13 +253,15 @@ export function mergeResult(a: CellValue, b: CellValue): CellValue {
 
 /**
  * Returns the hex color of the tile that this tile becomes when merged,
- * or null if there is no next color (Gray just lightens, so returns null).
+ * or null if there is no next color.
+ * Base tiles return null (they have two possible results; use the triangle).
  */
 export function tileNextHex(id: CellValue): string | null {
   if (id === 0) return null;
   const ci = tileColorIndex(id);
   if (ci === GRAY_IDX) return null;
-  const nextColor = MERGE_MAP[ci];
+  if (BASE_INDICES.has(ci)) return null; // base tiles have 2 results
+  const nextColor = SAME_MERGE_MAP[ci];
   if (nextColor === undefined) return null;
   if (nextColor === GRAY_IDX) return grayHex(0);
   return HEX_MAP[nextColor] ?? null;
@@ -235,12 +270,14 @@ export function tileNextHex(id: CellValue): string | null {
 /**
  * Returns the short label of the tile that this tile becomes when merged,
  * or null if there is no next color.
+ * Base tiles return null (they have two possible results; use the triangle).
  */
 export function tileNextLabel(id: CellValue): string | null {
   if (id === 0) return null;
   const ci = tileColorIndex(id);
   if (ci === GRAY_IDX) return null;
-  const nextColor = MERGE_MAP[ci];
+  if (BASE_INDICES.has(ci)) return null; // base tiles have 2 results
+  const nextColor = SAME_MERGE_MAP[ci];
   if (nextColor === undefined) return null;
   if (nextColor === GRAY_IDX) return 'Gr';
   return LABEL_MAP[nextColor] ?? null;
@@ -248,10 +285,18 @@ export function tileNextLabel(id: CellValue): string | null {
 
 /* ── Merge partners (for hint indicators) ────────────── */
 
-/** Returns color indices that this tile can merge with (always its own color). */
+/**
+ * Returns color indices that this tile can merge with.
+ * Base tiles return the other two base colors (cross-color merge).
+ * All other tiles merge with their own color.
+ */
 export function getMergePartners(id: CellValue): number[] {
   if (id === 0) return [];
-  return [tileColorIndex(id)];
+  const ci = tileColorIndex(id);
+  if (ci === CYAN_IDX) return [MAGENTA_IDX, YELLOW_IDX];
+  if (ci === MAGENTA_IDX) return [CYAN_IDX, YELLOW_IDX];
+  if (ci === YELLOW_IDX) return [CYAN_IDX, MAGENTA_IDX];
+  return [ci];
 }
 
 /* ── Base tile constants ─────────────────────────────── */

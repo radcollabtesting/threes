@@ -2,20 +2,25 @@ import { canMerge, mergeResult } from '../merge';
 import {
   CYAN, MAGENTA, YELLOW,
   encodeTile, tileColorIndex, tileDots,
+  CYAN_IDX, MAGENTA_IDX,
   BLUE_IDX, RED_IDX, GREEN_IDX, ORANGE_IDX, INDIGO_IDX, TEAL_IDX, GRAY_IDX,
 } from '../color';
 
 describe('merge rules (via merge.ts delegation)', () => {
-  test('same color CAN merge: C + C', () => {
-    expect(canMerge(CYAN, CYAN)).toBe(true);
+  test('base cross-color CAN merge: C + M', () => {
+    expect(canMerge(CYAN, MAGENTA)).toBe(true);
   });
 
-  test('same color CAN merge: M + M', () => {
-    expect(canMerge(MAGENTA, MAGENTA)).toBe(true);
+  test('base cross-color CAN merge: M + Y', () => {
+    expect(canMerge(MAGENTA, YELLOW)).toBe(true);
   });
 
-  test('different colors CANNOT merge: C + M', () => {
-    expect(canMerge(CYAN, MAGENTA)).toBe(false);
+  test('base cross-color CAN merge: Y + C', () => {
+    expect(canMerge(YELLOW, CYAN)).toBe(true);
+  });
+
+  test('same base color CANNOT merge: C + C', () => {
+    expect(canMerge(CYAN, CYAN)).toBe(false);
   });
 
   test('empty cells (0) never merge', () => {
@@ -23,7 +28,7 @@ describe('merge rules (via merge.ts delegation)', () => {
     expect(canMerge(0, CYAN)).toBe(false);
   });
 
-  test('different colors at same tier cannot merge', () => {
+  test('different primary colors at same tier cannot merge', () => {
     const R = encodeTile(RED_IDX, 0);
     const G = encodeTile(GREEN_IDX, 0);
     expect(canMerge(R, G)).toBe(false);
@@ -31,18 +36,18 @@ describe('merge rules (via merge.ts delegation)', () => {
 });
 
 describe('mergeResult — deterministic merge table', () => {
-  test('C + C → Blue', () => {
-    const result = mergeResult(CYAN, CYAN);
+  test('C + M → Blue', () => {
+    const result = mergeResult(CYAN, MAGENTA);
     expect(tileColorIndex(result)).toBe(BLUE_IDX);
   });
 
-  test('M + M → Red', () => {
-    const result = mergeResult(MAGENTA, MAGENTA);
+  test('M + Y → Red', () => {
+    const result = mergeResult(MAGENTA, YELLOW);
     expect(tileColorIndex(result)).toBe(RED_IDX);
   });
 
-  test('Y + Y → Green', () => {
-    const result = mergeResult(YELLOW, YELLOW);
+  test('Y + C → Green', () => {
+    const result = mergeResult(YELLOW, CYAN);
     expect(tileColorIndex(result)).toBe(GREEN_IDX);
   });
 
@@ -95,9 +100,10 @@ describe('mergeResult — deterministic merge table', () => {
     expect(tileDots(result)).toBe(1);
   });
 
-  test('dots are preserved through merges', () => {
-    const C1 = encodeTile(0, 1); // Cyan with 1 dot
-    const result = mergeResult(C1, C1);
+  test('dots are preserved through cross-color merges', () => {
+    const C1 = encodeTile(CYAN_IDX, 1);
+    const M1 = encodeTile(MAGENTA_IDX, 1);
+    const result = mergeResult(C1, M1);
     expect(tileColorIndex(result)).toBe(BLUE_IDX);
     expect(tileDots(result)).toBe(1);
   });

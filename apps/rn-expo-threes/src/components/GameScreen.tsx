@@ -21,6 +21,7 @@ import { COLORS, SIZES, BOARD, DARK_THEME, LIGHT_THEME, type ThemeColors } from 
 import type { Direction } from '@threes/game-logic';
 import { Board } from './Board';
 import { NextTilePreview } from './NextTilePreview';
+import { MixTriangle } from './MixTriangle';
 import { useGame } from '../hooks/useGame';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
 
@@ -93,11 +94,13 @@ export function GameScreen() {
         </View>
       </View>
 
-      {/* Score display */}
-      <View style={[styles.scoreWrapper, { marginTop: 30 * scale }]}>
+      {/* Score + mix triangle row */}
+      <View style={[styles.scoreRow, { marginTop: 30 * scale }]}>
+        <View style={{ width: 60 * scale }} />
         <Text style={[styles.scoreText, { fontSize: 20 * scale, color: theme.scoreText }]}>
           Score: {state.score}
         </Text>
+        <MixTriangle scale={scale} />
       </View>
 
       {/* Board area */}
@@ -157,8 +160,11 @@ const styles = StyleSheet.create({
   restartText: {
     color: '#FFF',
   },
-  scoreWrapper: {
+  scoreRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'stretch',
   },
   scoreText: {
     fontWeight: 'bold',

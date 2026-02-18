@@ -108,23 +108,23 @@ describe('tileTier', () => {
   });
 });
 
-describe('same-color merges: canMerge', () => {
-  test('same color + same dots can merge', () => {
-    expect(canMerge(CYAN, CYAN)).toBe(true);
-    expect(canMerge(MAGENTA, MAGENTA)).toBe(true);
-    expect(canMerge(YELLOW, YELLOW)).toBe(true);
+describe('base cross-color merges: canMerge', () => {
+  test('different base colors with same dots can merge', () => {
+    expect(canMerge(CYAN, MAGENTA)).toBe(true);
+    expect(canMerge(MAGENTA, YELLOW)).toBe(true);
+    expect(canMerge(YELLOW, CYAN)).toBe(true);
   });
 
-  test('same color + different dots cannot merge', () => {
+  test('same base color cannot merge', () => {
+    expect(canMerge(CYAN, CYAN)).toBe(false);
+    expect(canMerge(MAGENTA, MAGENTA)).toBe(false);
+    expect(canMerge(YELLOW, YELLOW)).toBe(false);
+  });
+
+  test('base colors with different dots cannot merge', () => {
     const C0 = encodeTile(CYAN_IDX, 0);
-    const C1 = encodeTile(CYAN_IDX, 1);
-    expect(canMerge(C0, C1)).toBe(false);
-  });
-
-  test('different colors cannot merge', () => {
-    expect(canMerge(CYAN, MAGENTA)).toBe(false);
-    expect(canMerge(CYAN, YELLOW)).toBe(false);
-    expect(canMerge(MAGENTA, YELLOW)).toBe(false);
+    const M1 = encodeTile(MAGENTA_IDX, 1);
+    expect(canMerge(C0, M1)).toBe(false);
   });
 
   test('empty cells never merge', () => {
@@ -163,20 +163,25 @@ describe('same-color merges: canMerge', () => {
   });
 });
 
-describe('mergeResult: tier 0 → tier 1 (deterministic)', () => {
-  test('C + C → Blue', () => {
-    const result = mergeResult(CYAN, CYAN);
+describe('mergeResult: base cross-color → primary', () => {
+  test('C + M → Blue', () => {
+    const result = mergeResult(CYAN, MAGENTA);
     expect(tileColorIndex(result)).toBe(BLUE_IDX);
     expect(tileDots(result)).toBe(0);
   });
 
-  test('M + M → Red', () => {
-    const result = mergeResult(MAGENTA, MAGENTA);
+  test('M + C → Blue (order independent)', () => {
+    const result = mergeResult(MAGENTA, CYAN);
+    expect(tileColorIndex(result)).toBe(BLUE_IDX);
+  });
+
+  test('M + Y → Red', () => {
+    const result = mergeResult(MAGENTA, YELLOW);
     expect(tileColorIndex(result)).toBe(RED_IDX);
   });
 
-  test('Y + Y → Green', () => {
-    const result = mergeResult(YELLOW, YELLOW);
+  test('Y + C → Green', () => {
+    const result = mergeResult(YELLOW, CYAN);
     expect(tileColorIndex(result)).toBe(GREEN_IDX);
   });
 });
@@ -267,14 +272,15 @@ describe('Gray + Gray merges', () => {
 describe('deterministic merge consistency', () => {
   test('same merge always produces the same result', () => {
     // Verify determinism: calling mergeResult multiple times gives same answer
-    const r1 = mergeResult(CYAN, CYAN);
-    const r2 = mergeResult(CYAN, CYAN);
+    const r1 = mergeResult(CYAN, MAGENTA);
+    const r2 = mergeResult(CYAN, MAGENTA);
     expect(r1).toBe(r2);
   });
 
-  test('dots are preserved through merges', () => {
+  test('dots are preserved through cross-color merges', () => {
     const C1 = encodeTile(CYAN_IDX, 1);
-    const result = mergeResult(C1, C1);
+    const M1 = encodeTile(MAGENTA_IDX, 1);
+    const result = mergeResult(C1, M1);
     expect(tileColorIndex(result)).toBe(BLUE_IDX);
     expect(tileDots(result)).toBe(1);
   });
@@ -307,16 +313,16 @@ describe('cross-tier merges are blocked', () => {
 });
 
 describe('tileHex', () => {
-  test('CYAN produces #53ffec', () => {
-    expect(tileHex(CYAN)).toBe('#53ffec');
+  test('CYAN produces #87FBE9', () => {
+    expect(tileHex(CYAN)).toBe('#87FBE9');
   });
 
-  test('MAGENTA produces #e854ff', () => {
-    expect(tileHex(MAGENTA)).toBe('#e854ff');
+  test('MAGENTA produces #CA4DF2', () => {
+    expect(tileHex(MAGENTA)).toBe('#CA4DF2');
   });
 
-  test('YELLOW produces #ffd654', () => {
-    expect(tileHex(YELLOW)).toBe('#ffd654');
+  test('YELLOW produces #F4CF5F', () => {
+    expect(tileHex(YELLOW)).toBe('#F4CF5F');
   });
 
   test('dotted tiles have same hex as undotted', () => {
@@ -389,10 +395,10 @@ describe('getMergePartners', () => {
     expect(getMergePartners(0)).toEqual([]);
   });
 
-  test('each tile merges with its own color', () => {
-    expect(getMergePartners(CYAN)).toEqual([CYAN_IDX]);
-    expect(getMergePartners(MAGENTA)).toEqual([MAGENTA_IDX]);
-    expect(getMergePartners(YELLOW)).toEqual([YELLOW_IDX]);
+  test('base tiles merge with the other two base colors', () => {
+    expect(getMergePartners(CYAN)).toEqual([MAGENTA_IDX, YELLOW_IDX]);
+    expect(getMergePartners(MAGENTA)).toEqual([CYAN_IDX, YELLOW_IDX]);
+    expect(getMergePartners(YELLOW)).toEqual([CYAN_IDX, MAGENTA_IDX]);
   });
 
   test('primary tile merges with its own color', () => {
