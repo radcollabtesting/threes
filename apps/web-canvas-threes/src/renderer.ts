@@ -443,7 +443,9 @@ export class Renderer {
         for (let c = 0; c < SIZES.gridSize; c++) {
           const val = grid[r][c];
           if (val === 0) continue;
-          const pts = scoreTile(val);
+          const base = scoreTile(val);
+          const mixCount = multipliers?.[r]?.[c] ?? 0;
+          const pts = mixCount > 0 ? base * Math.pow(2, mixCount) : base;
           const tx = bx + c * (tw + gx) + tw / 2;
           const ty = by + r * (th + gy) + th * 0.25;
           ctx.font = `bold ${14 * s}px ${scoreFont}`;
