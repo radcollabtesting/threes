@@ -68,8 +68,8 @@ function createRandomGenerator(rng: () => number): (grid: Grid) => CellValue {
  *   - If any primary colors exist on board: remaining chance picks from
  *     only the specific primaries the player has created.
  *   - Same for secondaries.
- *   Weights: 50% base, 25% primary (if any), 25% secondary (if any).
- *   If only primaries seen: 50% base, 50% primary.
+ *   Weights: 67% base, 17% primary (if any), 17% secondary (if any).
+ *   If only primaries seen: 67% base, 33% primary.
  *   Always consumes exactly 2 rng calls for determinism.
  */
 function createProgressiveGenerator(rng: () => number): (grid: Grid) => CellValue {
@@ -94,11 +94,11 @@ function createProgressiveGenerator(rng: () => number): (grid: Grid) => CellValu
     const tierRoll = rng();
     const tileRoll = rng();
 
-    if (seenPrimaries.length === 0 || tierRoll < 0.5) {
+    if (seenPrimaries.length === 0 || tierRoll < 2 / 3) {
       return BASE_TILES[Math.floor(tileRoll * BASE_TILES.length)];
     }
 
-    if (seenSecondaries.length === 0 || tierRoll < 0.75) {
+    if (seenSecondaries.length === 0 || tierRoll < 5 / 6) {
       return seenPrimaries[Math.floor(tileRoll * seenPrimaries.length)];
     }
 
