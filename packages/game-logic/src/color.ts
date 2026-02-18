@@ -216,6 +216,36 @@ export function mergeResult(a: CellValue, b: CellValue): CellValue {
   return encodeTile(nextColor, dots);
 }
 
+/* ── Next-color preview helpers ────────────────────── */
+
+/**
+ * Returns the hex color of the tile that this tile becomes when merged,
+ * or null if there is no next color (Gray just lightens, so returns null).
+ */
+export function tileNextHex(id: CellValue): string | null {
+  if (id === 0) return null;
+  const ci = tileColorIndex(id);
+  if (ci === GRAY_IDX) return null;
+  const nextColor = MERGE_MAP[ci];
+  if (nextColor === undefined) return null;
+  if (nextColor === GRAY_IDX) return grayHex(0);
+  return HEX_MAP[nextColor] ?? null;
+}
+
+/**
+ * Returns the short label of the tile that this tile becomes when merged,
+ * or null if there is no next color.
+ */
+export function tileNextLabel(id: CellValue): string | null {
+  if (id === 0) return null;
+  const ci = tileColorIndex(id);
+  if (ci === GRAY_IDX) return null;
+  const nextColor = MERGE_MAP[ci];
+  if (nextColor === undefined) return null;
+  if (nextColor === GRAY_IDX) return 'Gr';
+  return LABEL_MAP[nextColor] ?? null;
+}
+
 /* ── Merge partners (for hint indicators) ────────────── */
 
 /** Returns color indices that this tile can merge with (always its own color). */

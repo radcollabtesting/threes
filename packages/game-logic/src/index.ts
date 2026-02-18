@@ -34,6 +34,8 @@ export {
   tileHex,
   tileTextColor,
   tileLabel,
+  tileNextHex,
+  tileNextLabel,
   canMerge as colorCanMerge,
   mergeResult as colorMergeResult,
   getMergePartners,

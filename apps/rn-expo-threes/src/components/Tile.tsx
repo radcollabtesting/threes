@@ -8,7 +8,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SIZES } from '@threes/design-tokens';
-import { tileHex, tileTextColor, tileLabel, tileDisplayDots } from '@threes/game-logic';
+import { tileHex, tileTextColor, tileLabel, tileDisplayDots, tileNextHex, tileNextLabel } from '@threes/game-logic';
 
 interface TileProps {
   value: number;
@@ -22,6 +22,8 @@ export function Tile({ value, scale = 1, colorBlindMode = true }: TileProps) {
   const textColor = tileTextColor(value);
   const label = tileLabel(value);
   const dots = tileDisplayDots(value);
+  const nextHex = tileNextHex(value);
+  const nextLbl = tileNextLabel(value);
   const w = SIZES.tileWidth * scale;
   const h = SIZES.tileHeight * scale;
   const fontSize = SIZES.tileFontSize * scale;
@@ -40,7 +42,7 @@ export function Tile({ value, scale = 1, colorBlindMode = true }: TileProps) {
         },
       ]}
       accessible
-      accessibilityLabel={label ? `Tile ${label}${dots > 0 ? ` ${dots} dot${dots > 1 ? 's' : ''}` : ''}` : `Color tile`}
+      accessibilityLabel={label ? `Tile ${label}${nextLbl ? ` merges into ${nextLbl}` : ''}${dots > 0 ? ` ${dots} dot${dots > 1 ? 's' : ''}` : ''}` : `Color tile`}
       accessibilityRole="text"
     >
       {colorBlindMode && label && (
@@ -71,6 +73,43 @@ export function Tile({ value, scale = 1, colorBlindMode = true }: TileProps) {
           ))}
         </View>
       )}
+      {nextHex && !colorBlindMode && (
+        <View
+          style={[
+            styles.nextIndicator,
+            {
+              width: 3 * scale,
+              height: 3 * scale,
+              borderRadius: 1 * scale,
+              backgroundColor: nextHex,
+              borderWidth: 1 * scale,
+              borderColor: '#000000',
+              bottom: 3 * scale,
+            },
+          ]}
+        />
+      )}
+      {nextHex && nextLbl && colorBlindMode && (
+        <View style={[styles.nextLabelContainer, { bottom: 2 * scale }]}>
+          <Text style={[styles.nextLabelText, { color: textColor, fontSize: 8 * scale }]}>
+            {'\u2192 '}
+          </Text>
+          <View
+            style={{
+              width: 5 * scale,
+              height: 5 * scale,
+              borderRadius: 2.5 * scale,
+              backgroundColor: nextHex,
+              borderWidth: 0.5 * scale,
+              borderColor: '#000000',
+              marginRight: 2 * scale,
+            }}
+          />
+          <Text style={[styles.nextLabelText, { color: textColor, fontSize: 8 * scale }]}>
+            {nextLbl}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -91,5 +130,18 @@ const styles = StyleSheet.create({
   },
   dot: {
     backgroundColor: '#FFFFFF',
+  },
+  nextIndicator: {
+    position: 'absolute',
+    alignSelf: 'center',
+  },
+  nextLabelContainer: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+  },
+  nextLabelText: {
+    fontWeight: 'bold',
   },
 });

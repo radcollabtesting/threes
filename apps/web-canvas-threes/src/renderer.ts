@@ -5,7 +5,7 @@
  * Tile colors are computed dynamically from the color encoding system.
  */
 
-import { scoreTile, tileHex, tileTextColor, tileLabel, tileDisplayDots, getMergePartners, encodeTile, canMerge, tileColorIndex, tileDots, mergeResult, GRAY_IDX, grayHasValidMix, type CellValue, type Grid, type Direction, type Position } from '@threes/game-logic';
+import { scoreTile, tileHex, tileTextColor, tileLabel, tileDisplayDots, tileNextHex, tileNextLabel, getMergePartners, encodeTile, canMerge, tileColorIndex, tileDots, mergeResult, GRAY_IDX, grayHasValidMix, type CellValue, type Grid, type Direction, type Position } from '@threes/game-logic';
 import { COLORS, SIZES, BOARD, ANIMATION, BUTTON, SCORE_LIST, DARK_THEME, LIGHT_THEME, type ThemeColors } from '@threes/design-tokens';
 import type { AnimState } from './animation';
 import type { DragState, TilePreview } from './drag';
@@ -853,6 +853,74 @@ export class Renderer {
         ctx.beginPath();
         ctx.arc(dx, dotStartY, dotRadius, 0, Math.PI * 2);
         ctx.fill();
+      }
+    }
+
+    // Draw next-color indicator at bottom center
+    const nextHex = tileNextHex(value);
+    if (nextHex) {
+      if (this.colorBlindMode) {
+        // Color blind mode: "→ B" text with colored dot
+        const nextLbl = tileNextLabel(value);
+        if (nextLbl) {
+          const cbFontSize = 8 * s;
+          const cbDotR = 2.5 * s;
+          const cbText = nextLbl;
+          ctx.font = `bold ${cbFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+          const textMetrics = ctx.measureText(cbText);
+          const arrowMetrics = ctx.measureText('\u2192 ');
+          const totalW = arrowMetrics.width + cbDotR * 2 + 2 * s + textMetrics.width;
+          const startX = x + (w - totalW) / 2;
+          const baseY = y + h - 6 * s;
+
+          // Arrow + label
+          ctx.fillStyle = text;
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('\u2192 ', startX, baseY);
+
+          // Colored dot
+          const dotCx = startX + arrowMetrics.width + cbDotR;
+          ctx.fillStyle = nextHex;
+          ctx.beginPath();
+          ctx.arc(dotCx, baseY, cbDotR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 0.5 * s;
+          ctx.stroke();
+
+          // Label after dot
+          ctx.fillStyle = text;
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(cbText, dotCx + cbDotR + 2 * s, baseY);
+        }
+      } else {
+        // Normal mode: 3px square with 1px border radius at bottom center
+        const sqSize = 3 * s;
+        const sqR = 1 * s;
+        const sqX = x + (w - sqSize) / 2;
+        const sqY = y + h - sqSize - 3 * s;
+
+        // Filled square
+        ctx.fillStyle = nextHex;
+        ctx.beginPath();
+        ctx.moveTo(sqX + sqR, sqY);
+        ctx.lineTo(sqX + sqSize - sqR, sqY);
+        ctx.quadraticCurveTo(sqX + sqSize, sqY, sqX + sqSize, sqY + sqR);
+        ctx.lineTo(sqX + sqSize, sqY + sqSize - sqR);
+        ctx.quadraticCurveTo(sqX + sqSize, sqY + sqSize, sqX + sqSize - sqR, sqY + sqSize);
+        ctx.lineTo(sqX + sqR, sqY + sqSize);
+        ctx.quadraticCurveTo(sqX, sqY + sqSize, sqX, sqY + sqSize - sqR);
+        ctx.lineTo(sqX, sqY + sqR);
+        ctx.quadraticCurveTo(sqX, sqY, sqX + sqR, sqY);
+        ctx.closePath();
+        ctx.fill();
+
+        // 1px black border
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1 * s;
+        ctx.stroke();
       }
     }
 
