@@ -896,11 +896,11 @@ export class Renderer {
           ctx.fillText(cbText, dotCx + cbDotR + 2 * s, baseY);
         }
       } else {
-        // Normal mode: 3px square with 1px border radius at bottom center
-        const sqSize = 3 * s;
-        const sqR = 1 * s;
+        // Normal mode: 12px square with 3px border radius at bottom center
+        const sqSize = 12 * s;
+        const sqR = 3 * s;
         const sqX = x + (w - sqSize) / 2;
-        const sqY = y + h - sqSize - 3 * s;
+        const sqY = y + h - sqSize - 6 * s;
 
         // Filled square
         ctx.fillStyle = nextHex;

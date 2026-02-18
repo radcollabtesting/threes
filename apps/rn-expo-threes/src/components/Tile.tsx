@@ -78,13 +78,13 @@ export function Tile({ value, scale = 1, colorBlindMode = true }: TileProps) {
           style={[
             styles.nextIndicator,
             {
-              width: 3 * scale,
-              height: 3 * scale,
-              borderRadius: 1 * scale,
+              width: 12 * scale,
+              height: 12 * scale,
+              borderRadius: 3 * scale,
               backgroundColor: nextHex,
               borderWidth: 1 * scale,
               borderColor: '#000000',
-              bottom: 3 * scale,
+              bottom: 6 * scale,
             },
           ]}
         />
