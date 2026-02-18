@@ -204,10 +204,10 @@ export class ThreesGame {
 
     this._lastMoveEvents = result.events;
 
-    // Update multiplier grid: clear sources, set result = sum of inputs + 2
+    // Update multiplier grid: clear sources, increment mix count (+1 per mix)
     this._multipliers[src1.row][src1.col] = 0;
     this._multipliers[src2.row][src2.col] = 0;
-    this._multipliers[grayPos.row][grayPos.col] = m1 + m2 + 2;
+    this._multipliers[grayPos.row][grayPos.col] = m1 + m2 + 1;
 
     // Update score
     if (this.config.scoringEnabled) {
