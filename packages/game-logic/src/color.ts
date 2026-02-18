@@ -301,6 +301,40 @@ export function getMergePartners(id: CellValue): number[] {
   return [];
 }
 
+/* ── Merge combo info (for next-tile preview) ────────── */
+
+export interface MergeCombo {
+  partnerHex: string;
+  partnerLabel: string;
+  resultHex: string;
+  resultLabel: string;
+}
+
+/**
+ * Returns the merge combos for a tile: each partner it can merge with
+ * and what the result would be.
+ * E.g., for Cyan: [{ partner: M, result: B }, { partner: Y, result: G }]
+ */
+export function tileMergeCombos(id: CellValue): MergeCombo[] {
+  if (id === 0) return [];
+  const ci = tileColorIndex(id);
+  if (ci === GRAY_IDX) return [];
+  const partners = getMergePartners(id);
+  const combos: MergeCombo[] = [];
+  for (const pci of partners) {
+    const partnerTile = encodeTile(pci, 0);
+    const resultTile = mergeResult(id, partnerTile);
+    const resultCi = tileColorIndex(resultTile);
+    combos.push({
+      partnerHex: HEX_MAP[pci] ?? '#000',
+      partnerLabel: LABEL_MAP[pci] ?? '?',
+      resultHex: resultCi === GRAY_IDX ? grayHex(0) : (HEX_MAP[resultCi] ?? '#000'),
+      resultLabel: resultCi === GRAY_IDX ? 'Gr' : (LABEL_MAP[resultCi] ?? '?'),
+    });
+  }
+  return combos;
+}
+
 /* ── Base tile constants ─────────────────────────────── */
 
 export const CYAN = encodeTile(CYAN_IDX, 0);

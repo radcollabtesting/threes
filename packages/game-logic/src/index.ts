@@ -39,6 +39,8 @@ export {
   canMerge as colorCanMerge,
   mergeResult as colorMergeResult,
   getMergePartners,
+  tileMergeCombos,
+  type MergeCombo,
   CYAN,
   MAGENTA,
   YELLOW,

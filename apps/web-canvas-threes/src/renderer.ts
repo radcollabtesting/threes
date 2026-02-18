@@ -5,7 +5,7 @@
  * Tile colors are computed dynamically from the color encoding system.
  */
 
-import { scoreTile, tileHex, tileTextColor, tileLabel, tileDisplayDots, tileNextHex, tileNextLabel, getMergePartners, encodeTile, canMerge, tileColorIndex, tileDots, mergeResult, GRAY_IDX, grayHasValidMix, type CellValue, type Grid, type Direction, type Position } from '@threes/game-logic';
+import { scoreTile, tileHex, tileTextColor, tileLabel, tileDisplayDots, tileNextHex, tileNextLabel, getMergePartners, tileMergeCombos, encodeTile, canMerge, tileColorIndex, tileDots, mergeResult, GRAY_IDX, grayHasValidMix, type CellValue, type Grid, type Direction, type Position } from '@threes/game-logic';
 import { COLORS, SIZES, BOARD, ANIMATION, BUTTON, SCORE_LIST, DARK_THEME, LIGHT_THEME, type ThemeColors } from '@threes/design-tokens';
 import type { AnimState } from './animation';
 import type { DragState, TilePreview } from './drag';
@@ -156,7 +156,7 @@ export class Renderer {
       SIZES.tileHeight +
       SIZES.nextLabelGap +
       SIZES.nextLabelFontSize +
-      30;
+      50;
     const neededW = BOARD.width + 40;
 
     this._scale = Math.min(vw / neededW, vh / neededH, 2.5);
@@ -409,6 +409,64 @@ export class Renderer {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.fillText('next', nextX + tw / 2, labelY);
+
+      // ── Merge combo hints ────────────────────────────────
+      const comboTile = (anim.nextTile.active && anim.nextTile.progress >= 0.5)
+        ? anim.nextTile.newValue
+        : nextTile;
+      if (comboTile > 0) {
+        const combos = tileMergeCombos(comboTile);
+        if (combos.length > 0) {
+          const comboY = labelY + SIZES.nextLabelFontSize * s + 4 * s;
+          const dotR = 5 * s;
+          const arrowW = 8 * s;
+          const comboGap = 4 * s;
+          // Each combo: [partner dot] + [arrow] + [result dot]
+          const comboW = dotR * 2 + arrowW + dotR * 2;
+          const totalW = combos.length * comboW + (combos.length - 1) * comboGap;
+          let cx = nextX + tw / 2 - totalW / 2 + dotR;
+
+          ctx.font = `bold ${7 * s}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+
+          for (const combo of combos) {
+            // Partner dot
+            ctx.fillStyle = combo.partnerHex;
+            ctx.beginPath();
+            ctx.arc(cx, comboY, dotR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#000';
+            ctx.fillText(combo.partnerLabel, cx, comboY);
+
+            // Arrow
+            const arrowX = cx + dotR + 2 * s;
+            ctx.strokeStyle = theme.uiText;
+            ctx.lineWidth = 1.5 * s;
+            ctx.beginPath();
+            ctx.moveTo(arrowX, comboY);
+            ctx.lineTo(arrowX + arrowW - 3 * s, comboY);
+            ctx.stroke();
+            // Arrowhead
+            ctx.beginPath();
+            ctx.moveTo(arrowX + arrowW - 3 * s, comboY - 2.5 * s);
+            ctx.lineTo(arrowX + arrowW, comboY);
+            ctx.lineTo(arrowX + arrowW - 3 * s, comboY + 2.5 * s);
+            ctx.stroke();
+
+            // Result dot
+            const resCx = cx + dotR * 2 + arrowW + 2 * s;
+            ctx.fillStyle = combo.resultHex;
+            ctx.beginPath();
+            ctx.arc(resCx, comboY, dotR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#000';
+            ctx.fillText(combo.resultLabel, resCx, comboY);
+
+            cx = resCx + dotR + comboGap;
+          }
+        }
+      }
     }
 
     // ── Tutorial "Continue" button ──────────────────────
@@ -1212,94 +1270,120 @@ export class Renderer {
   }
 
   /**
-   * Draw a small CMY reference triangle showing base-tier cross-color
-   * merge rules: C+M→B, M+Y→R, Y+C→G.
+   * Draw nested CMY → RGB reference triangles showing cross-color merge rules.
+   * Outer: C+M→B, M+Y→R, Y+C→G
+   * Inner: B+R→I, R+G→O, B+G→T
    * Positioned between score and board, right-aligned.
    */
   private drawMixTriangle(vw: number, s: number): void {
     const ctx = this.ctx;
     const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
-    // Triangle size and position
-    const triSize = 36 * s;    // edge length of the equilateral triangle
-    const nodeR = 7 * s;       // radius of color circles
-    const rightMargin = 14 * s;
+    const triSize = 44 * s;
+    const nodeR = 7 * s;
+    const innerNodeR = 5.5 * s;
+    const rightMargin = 10 * s;
 
-    // Place it to the right of center, vertically between score and board
     const triCx = this._boardX + BOARD.width * s - triSize / 2 - rightMargin;
     const triCy = (30 * s + this._boardY) / 2 + 4 * s;
-
-    // Equilateral triangle vertices: top, bottom-left, bottom-right
     const h = triSize * Math.sqrt(3) / 2;
-    // Vertices: Cyan at top, Magenta at bottom-left, Yellow at bottom-right
+
+    // Outer triangle: C top, M bottom-left, Y bottom-right
     const cyanPos  = { x: triCx,                y: triCy - h * 0.45 };
     const magPos   = { x: triCx - triSize / 2,  y: triCy + h * 0.55 };
     const yelPos   = { x: triCx + triSize / 2,  y: triCy + h * 0.55 };
 
-    // Edge midpoints (for result color labels)
-    const midCM = { x: (cyanPos.x + magPos.x) / 2, y: (cyanPos.y + magPos.y) / 2 };
-    const midMY = { x: (magPos.x + yelPos.x) / 2,  y: (magPos.y + yelPos.y) / 2 };
-    const midYC = { x: (yelPos.x + cyanPos.x) / 2, y: (yelPos.y + cyanPos.y) / 2 };
+    // Inner triangle: B, R, G sit at the outer edge midpoints (inverted)
+    const bluePos  = { x: (cyanPos.x + magPos.x) / 2, y: (cyanPos.y + magPos.y) / 2 };
+    const redPos   = { x: (magPos.x + yelPos.x) / 2,  y: (magPos.y + yelPos.y) / 2 };
+    const greenPos = { x: (yelPos.x + cyanPos.x) / 2, y: (yelPos.y + cyanPos.y) / 2 };
 
-    // Draw edges (colored by result)
-    const lineW = 2.5 * s;
-    const edges: { from: typeof cyanPos; to: typeof cyanPos; color: string }[] = [
-      { from: cyanPos, to: magPos, color: '#5764F5' },  // C+M → Blue
-      { from: magPos,  to: yelPos, color: '#EB5560' },  // M+Y → Red
-      { from: yelPos,  to: cyanPos, color: '#77D054' }, // Y+C → Green
-    ];
+    // Inner edge midpoints (for I, O, T labels)
+    const midBR = { x: (bluePos.x + redPos.x) / 2, y: (bluePos.y + redPos.y) / 2 };
+    const midRG = { x: (redPos.x + greenPos.x) / 2, y: (redPos.y + greenPos.y) / 2 };
+    const midBG = { x: (bluePos.x + greenPos.x) / 2, y: (bluePos.y + greenPos.y) / 2 };
 
-    for (const edge of edges) {
-      ctx.strokeStyle = edge.color;
+    const lineW = 2 * s;
+
+    // Outer edges (B, R, G colored)
+    for (const e of [
+      { from: cyanPos, to: magPos,  color: '#5764F5' },
+      { from: magPos,  to: yelPos,  color: '#EB5560' },
+      { from: yelPos,  to: cyanPos, color: '#77D054' },
+    ]) {
+      ctx.strokeStyle = e.color;
       ctx.lineWidth = lineW;
       ctx.beginPath();
-      ctx.moveTo(edge.from.x, edge.from.y);
-      ctx.lineTo(edge.to.x, edge.to.y);
+      ctx.moveTo(e.from.x, e.from.y);
+      ctx.lineTo(e.to.x, e.to.y);
       ctx.stroke();
     }
 
-    // Draw result labels on edges
-    const resultFontSize = 8 * s;
-    ctx.font = `bold ${resultFontSize}px ${font}`;
+    // Inner edges (I, O, T colored)
+    for (const e of [
+      { from: bluePos,  to: redPos,   color: '#964EF5' },
+      { from: redPos,   to: greenPos, color: '#E98028' },
+      { from: bluePos,  to: greenPos, color: '#58AC91' },
+    ]) {
+      ctx.strokeStyle = e.color;
+      ctx.lineWidth = lineW;
+      ctx.beginPath();
+      ctx.moveTo(e.from.x, e.from.y);
+      ctx.lineTo(e.to.x, e.to.y);
+      ctx.stroke();
+    }
+
+    // Inner result labels (I, O, T)
+    const smFont = 6 * s;
+    ctx.font = `bold ${smFont}px ${font}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-
-    const results: { pos: typeof midCM; label: string; color: string }[] = [
-      { pos: midCM, label: 'B', color: '#5764F5' },
-      { pos: midMY, label: 'R', color: '#EB5560' },
-      { pos: midYC, label: 'G', color: '#77D054' },
-    ];
-
-    for (const r of results) {
-      // Small dark background pill for readability
-      const tw = ctx.measureText(r.label).width + 4 * s;
-      const th = resultFontSize + 2 * s;
+    for (const r of [
+      { pos: midBR, label: 'I', color: '#964EF5' },
+      { pos: midRG, label: 'O', color: '#E98028' },
+      { pos: midBG, label: 'T', color: '#58AC91' },
+    ]) {
       ctx.fillStyle = 'rgba(0,0,0,0.7)';
       ctx.beginPath();
-      ctx.arc(r.pos.x, r.pos.y, th / 2, 0, Math.PI * 2);
+      ctx.arc(r.pos.x, r.pos.y, smFont * 0.7, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = r.color;
       ctx.fillText(r.label, r.pos.x, r.pos.y);
     }
 
-    // Draw vertex circles (C, M, Y)
-    const vertices: { pos: typeof cyanPos; color: string; label: string; textColor: string }[] = [
+    // Inner vertex circles (B, R, G)
+    for (const v of [
+      { pos: bluePos,  color: '#5764F5', label: 'B', textColor: '#FFF' },
+      { pos: redPos,   color: '#EB5560', label: 'R', textColor: '#FFF' },
+      { pos: greenPos, color: '#77D054', label: 'G', textColor: '#000' },
+    ]) {
+      ctx.fillStyle = v.color;
+      ctx.beginPath();
+      ctx.arc(v.pos.x, v.pos.y, innerNodeR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 1 * s;
+      ctx.stroke();
+      ctx.fillStyle = v.textColor;
+      ctx.font = `bold ${7 * s}px ${font}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(v.label, v.pos.x, v.pos.y);
+    }
+
+    // Outer vertex circles (C, M, Y)
+    for (const v of [
       { pos: cyanPos, color: '#87FBE9', label: 'C', textColor: '#000' },
       { pos: magPos,  color: '#CA4DF2', label: 'M', textColor: '#FFF' },
       { pos: yelPos,  color: '#F4CF5F', label: 'Y', textColor: '#000' },
-    ];
-
-    for (const v of vertices) {
-      // Filled circle
+    ]) {
       ctx.fillStyle = v.color;
       ctx.beginPath();
       ctx.arc(v.pos.x, v.pos.y, nodeR, 0, Math.PI * 2);
       ctx.fill();
-      // Border
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 1.5 * s;
       ctx.stroke();
-      // Label
       ctx.fillStyle = v.textColor;
       ctx.font = `bold ${8 * s}px ${font}`;
       ctx.textAlign = 'center';
