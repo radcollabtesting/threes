@@ -340,12 +340,11 @@ export function tileMergeCombos(id: CellValue): MergeCombo[] {
 export const CYAN = encodeTile(CYAN_IDX, 0);
 export const MAGENTA = encodeTile(MAGENTA_IDX, 0);
 export const YELLOW = encodeTile(YELLOW_IDX, 0);
+export const BLUE = encodeTile(BLUE_IDX, 0);
+export const RED = encodeTile(RED_IDX, 0);
+export const GREEN = encodeTile(GREEN_IDX, 0);
 export const BASE_TILES: CellValue[] = [CYAN, MAGENTA, YELLOW];
-export const PRIMARY_TILES: CellValue[] = [
-  encodeTile(BLUE_IDX, 0),
-  encodeTile(RED_IDX, 0),
-  encodeTile(GREEN_IDX, 0),
-];
+export const PRIMARY_TILES: CellValue[] = [BLUE, RED, GREEN];
 export const SECONDARY_TILES: CellValue[] = [
   encodeTile(ORANGE_IDX, 0),
   encodeTile(VIOLET_IDX, 0),

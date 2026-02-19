@@ -1,5 +1,5 @@
 import type { Grid, Position } from './types';
-import { CYAN, MAGENTA, YELLOW, tileLabel, tileHex } from './color';
+import { BLUE, RED, GREEN, tileLabel, tileHex } from './color';
 
 /** Creates a gridSize x gridSize grid filled with 0 (empty) */
 export function createEmptyGrid(gridSize: number): Grid {
@@ -29,23 +29,23 @@ export function isGridFull(grid: Grid): boolean {
   return getEmptyCells(grid).length === 0;
 }
 
-const C = CYAN;
-const M = MAGENTA;
-const Y = YELLOW;
+const B = BLUE;
+const R = RED;
+const G = GREEN;
 
 /**
  * Fixture board for the color mixing game.
- *   Row 0: [C, M, _, Y]
- *   Row 1: [M, _, _, C]
+ *   Row 0: [B, R, _, G]
+ *   Row 1: [R, _, _, B]
  *   Row 2: [_, _, _, _]
  *   Row 3: [_, _, _, _]
  *
- * Swipe up merges C+M (col 0) → Blue, Y+C (col 3) → Green.
+ * Swipe up merges B+R (col 0) → Indigo, G+B (col 3) → Teal.
  */
 export function getFixtureGrid(): Grid {
   return [
-    [C, M, 0, Y],
-    [M, 0, 0, C],
+    [B, R, 0, G],
+    [R, 0, 0, B],
     [0, 0, 0, 0],
     [0, 0, 0, 0],
   ];

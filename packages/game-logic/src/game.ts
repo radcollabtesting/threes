@@ -19,7 +19,7 @@ import { selectSpawnPosition } from './spawn';
 import { createNextTileGenerator } from './next-tile';
 import { scoreGrid, scoreGridWithMultipliers } from './score';
 import { createRng, pickRandom, randomInt } from '@threes/rng';
-import { BASE_TILES, MAGENTA, tileColorIndex, GRAY_IDX } from './color';
+import { PRIMARY_TILES, RED, tileColorIndex, GRAY_IDX } from './color';
 import { applyCatalystMix, hasValidCatalystMix } from './catalyst-mix';
 import type { Position } from './types';
 
@@ -266,7 +266,7 @@ export class ThreesGame {
   private _initializeBoard(): void {
     if (this.config.fixtureMode) {
       this._grid = getFixtureGrid();
-      this._nextTile = MAGENTA; // default fixture next tile
+      this._nextTile = RED; // default fixture next tile
     } else {
       this._placeRandomStartTiles();
       this._nextTile = this._nextTileGen(this._grid);
@@ -319,7 +319,7 @@ export class ThreesGame {
   /**
    * Places random starting tiles on the empty board.
    * If startTilesCount is 0, picks a random count between 3 and 5.
-   * Values are always base color tiles (C, M, Y).
+   * Values are always primary color tiles (B, R, G).
    */
   private _placeRandomStartTiles(): void {
     const count = this.config.startTilesCount > 0
@@ -336,7 +336,7 @@ export class ThreesGame {
       if (empty.length === 0) break;
 
       const pos = pickRandom(empty, this._rng);
-      const val = BASE_TILES[Math.floor(this._rng() * BASE_TILES.length)];
+      const val = PRIMARY_TILES[Math.floor(this._rng() * PRIMARY_TILES.length)];
       this._grid[pos.row][pos.col] = val;
     }
   }

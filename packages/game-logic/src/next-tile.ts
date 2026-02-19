@@ -1,9 +1,9 @@
 import type { CellValue, Grid, NextTileStrategy } from './types';
 import { shuffleArray } from '@threes/rng';
 import {
-  CYAN, MAGENTA, YELLOW,
-  BASE_TILES, PRIMARY_TILES, SECONDARY_TILES,
-  tileTier, tileColorIndex, encodeTile, canMerge, mergeResult,
+  BLUE, RED, GREEN,
+  PRIMARY_TILES, SECONDARY_TILES,
+  tileTier, canMerge, mergeResult,
 } from './color';
 
 /**
@@ -29,15 +29,15 @@ export function createNextTileGenerator(
 
 /**
  * BAG generator:
- *   Bag = [C,C,C,C, M,M,M,M, Y,Y,Y,Y]  (12 tiles)
+ *   Bag = [B,B,B,B, R,R,R,R, G,G,G,G]  (12 tiles)
  *   Shuffle with seeded RNG on creation and on each refill.
  *   Pop one value per call.
  */
 function createBagGenerator(rng: () => number): (grid: Grid) => CellValue {
   const BAG_TEMPLATE: CellValue[] = [
-    CYAN, CYAN, CYAN, CYAN,
-    MAGENTA, MAGENTA, MAGENTA, MAGENTA,
-    YELLOW, YELLOW, YELLOW, YELLOW,
+    BLUE, BLUE, BLUE, BLUE,
+    RED, RED, RED, RED,
+    GREEN, GREEN, GREEN, GREEN,
   ];
 
   let bag: CellValue[] = [];
@@ -52,12 +52,11 @@ function createBagGenerator(rng: () => number): (grid: Grid) => CellValue {
 
 /**
  * RANDOM generator:
- *   Uniform random choice among {C, M, Y}.
+ *   Uniform random choice among {B, R, G}.
  */
 function createRandomGenerator(rng: () => number): (grid: Grid) => CellValue {
-  const VALUES: CellValue[] = [CYAN, MAGENTA, YELLOW];
   return function nextRandom(_grid: Grid): CellValue {
-    return VALUES[Math.floor(rng() * VALUES.length)];
+    return PRIMARY_TILES[Math.floor(rng() * PRIMARY_TILES.length)];
   };
 }
 
@@ -106,19 +105,19 @@ const HIGHER_TIER_EDGE_CHANCE = 0.1;
 
 /**
  * PROGRESSIVE generator:
- *   Always spawns base tiles (C, M, Y) with chain-merge weighting.
+ *   Always spawns primary tiles (B, R, G) with chain-merge weighting.
  *
- *   Chain-merge bias: for each base candidate, score how many "chain"
- *   opportunities exist — where the candidate merges with a base tile
- *   on the edge, and the result can then merge with a neighbor of that
+ *   Chain-merge bias: for each primary candidate, score how many "chain"
+ *   opportunities exist — where the candidate merges with a primary on
+ *   the edge, and the result can then merge with a neighbor of that
  *   edge cell. Higher-scoring candidates are more likely to be picked.
  *
- *   Example: Yellow on edge, Red next to it →
- *     Cyan scores because C+Y→Green, Green+Red→Orange (chain!)
+ *   Example: Blue on edge, Orange next to it →
+ *     Red scores because R+B→Indigo, Indigo+Orange→Gray (chain!)
  *
- *   10% of the time, if a primary or secondary tile sits on the edge,
- *   spawn a base tile that can directly merge with it instead (its
- *   cross-color partner). Falls back to chain-weighted base pick.
+ *   10% of the time, if a secondary tile sits on the edge, spawn its
+ *   same-tier merge partner for a direct match opportunity.
+ *   Falls back to chain-weighted primary pick.
  *
  *   Always consumes exactly 3 rng calls for determinism.
  */
@@ -133,17 +132,12 @@ function createProgressiveGenerator(rng: () => number): (grid: Grid) => CellValu
 
     const edgeCells = getEdgeCells(grid);
 
-    // ── 10% chance: spawn a same-tier partner for a primary/secondary on the edge ──
+    // ── 10% chance: spawn a same-tier partner for a secondary on the edge ──
     if (tierRoll < HIGHER_TIER_EDGE_CHANCE) {
       const candidates: CellValue[] = [];
       for (const ec of edgeCells) {
         const tier = tileTier(ec.value);
-        if (tier === 1) {
-          // Find primary tiles that can merge with this edge primary
-          for (const p of PRIMARY_TILES) {
-            if (canMerge(p, ec.value)) candidates.push(p);
-          }
-        } else if (tier === 2) {
+        if (tier === 2) {
           // Find secondary tiles that can merge with this edge secondary
           for (const s of SECONDARY_TILES) {
             if (canMerge(s, ec.value)) candidates.push(s);
@@ -153,23 +147,23 @@ function createProgressiveGenerator(rng: () => number): (grid: Grid) => CellValu
       if (candidates.length > 0) {
         return candidates[Math.floor(tileRoll * candidates.length)];
       }
-      // Fall through to chain-weighted base pick
+      // Fall through to chain-weighted primary pick
     }
 
-    // ── 90% (or fallback): base tiles with chain-merge weighting ──
+    // ── 90% (or fallback): primary tiles with chain-merge weighting ──
     const scores = new Map<CellValue, number>();
-    for (const b of BASE_TILES) scores.set(b, 1); // baseline weight of 1
+    for (const p of PRIMARY_TILES) scores.set(p, 1); // baseline weight of 1
 
     for (const ec of edgeCells) {
-      for (const b of BASE_TILES) {
-        if (!canMerge(b, ec.value)) continue;
-        const result = mergeResult(b, ec.value);
+      for (const p of PRIMARY_TILES) {
+        if (!canMerge(p, ec.value)) continue;
+        const result = mergeResult(p, ec.value);
         // Check if the merge result can chain-merge with any neighbor
         for (const [nr, nc] of neighbors(ec.r, ec.c, size)) {
           const neighborVal = grid[nr][nc];
           if (neighborVal === 0) continue;
           if (canMerge(result, neighborVal)) {
-            scores.set(b, (scores.get(b) ?? 1) + 3);
+            scores.set(p, (scores.get(p) ?? 1) + 3);
           }
         }
       }
@@ -185,6 +179,6 @@ function createProgressiveGenerator(rng: () => number): (grid: Grid) => CellValu
       if (pick <= 0) return tile;
     }
 
-    return BASE_TILES[Math.floor(tileRoll * BASE_TILES.length)];
+    return PRIMARY_TILES[Math.floor(tileRoll * PRIMARY_TILES.length)];
   };
 }

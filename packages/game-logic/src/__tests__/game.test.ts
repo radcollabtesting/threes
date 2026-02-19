@@ -1,8 +1,9 @@
 import { ThreesGame } from '../game';
 import {
-  CYAN, MAGENTA, YELLOW, BASE_TILES,
+  BLUE, RED, GREEN, PRIMARY_TILES,
   tileColorIndex, tileTier,
   BLUE_IDX, RED_IDX, GREEN_IDX,
+  INDIGO_IDX, TEAL_IDX,
 } from '../color';
 
 describe('ThreesGame', () => {
@@ -19,19 +20,19 @@ describe('ThreesGame', () => {
       expect(count).toBeLessThanOrEqual(5);
 
       for (const v of game.grid.flat()) {
-        if (v > 0) expect(BASE_TILES).toContain(v);
+        if (v > 0) expect(PRIMARY_TILES).toContain(v);
       }
     });
 
     test('fixture mode loads color reference board', () => {
       const game = new ThreesGame({ fixtureMode: true });
       expect(game.grid).toEqual([
-        [CYAN, MAGENTA, 0, YELLOW],
-        [MAGENTA, 0, 0, CYAN],
+        [BLUE, RED, 0, GREEN],
+        [RED, 0, 0, BLUE],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
       ]);
-      expect(game.nextTile).toBe(MAGENTA);
+      expect(game.nextTile).toBe(RED);
     });
   });
 
@@ -45,29 +46,29 @@ describe('ThreesGame', () => {
 
     test('valid move spawns a tile and draws new nextTile', () => {
       const game = new ThreesGame({ fixtureMode: true });
-      expect(game.nextTile).toBe(MAGENTA);
+      expect(game.nextTile).toBe(RED);
 
       game.move('up');
 
-      // After merge, primaries exist on board so progressive may return primary
+      // After merge, secondaries exist on board so progressive may return secondary
       expect(game.nextTile).toBeGreaterThan(0);
     });
 
     test('fixture: swipe up merges adjacent cross-color tiles', () => {
       const game = new ThreesGame({ fixtureMode: true });
-      // Board: [C, M, _, Y]
-      //        [M, _, _, C]
-      // Swipe up: C+M (col 0) → Blue, Y+C (col 3) → Green
+      // Board: [B, R, _, G]
+      //        [R, _, _, B]
+      // Swipe up: B+R (col 0) → Indigo, G+B (col 3) → Teal
       game.move('up');
       const g = game.grid;
-      // Col 0: C+M → Blue
-      expect(tileTier(g[0][0])).toBe(1);
-      expect(tileColorIndex(g[0][0])).toBe(BLUE_IDX);
-      // Col 3: Y+C → Green
-      expect(tileTier(g[0][3])).toBe(1);
-      expect(tileColorIndex(g[0][3])).toBe(GREEN_IDX);
-      // Magenta stays
-      expect(g[0][1]).toBe(MAGENTA);
+      // Col 0: B+R → Indigo
+      expect(tileTier(g[0][0])).toBe(2);
+      expect(tileColorIndex(g[0][0])).toBe(INDIGO_IDX);
+      // Col 3: G+B → Teal
+      expect(tileTier(g[0][3])).toBe(2);
+      expect(tileColorIndex(g[0][3])).toBe(TEAL_IDX);
+      // Red stays
+      expect(g[0][1]).toBe(RED);
     });
   });
 
@@ -93,8 +94,8 @@ describe('ThreesGame', () => {
       const game = new ThreesGame();
       expect(game.score).toBeGreaterThan(0);
       const count = game.grid.flat().filter(v => v > 0).length;
-      // All base tiles are tier 0 → 3 pts each
-      expect(game.score).toBe(count * 3);
+      // All primary tiles are tier 1 → 9 pts each
+      expect(game.score).toBe(count * 9);
     });
   });
 
@@ -161,23 +162,22 @@ describe('ThreesGame', () => {
   describe('progressive spawning', () => {
     test('default strategy is progressive', () => {
       const game = new ThreesGame({ seed: 1 });
-      // With only base tiles on board, nextTile should be a base tile
-      expect(BASE_TILES).toContain(game.nextTile);
+      // With only primary tiles on board, nextTile should be a primary tile
+      expect(PRIMARY_TILES).toContain(game.nextTile);
     });
 
-    test('initial nextTile is always a base tile (no primaries on board yet)', () => {
-      // Before any merges, only base tiles should spawn
+    test('initial nextTile is always a primary tile', () => {
       for (let s = 1; s <= 5; s++) {
         const game = new ThreesGame({ seed: s });
-        expect(BASE_TILES).toContain(game.nextTile);
+        expect(PRIMARY_TILES).toContain(game.nextTile);
       }
     });
 
     test('bag strategy still works when explicitly set', () => {
       const game = new ThreesGame({ seed: 42, nextTileStrategy: 'bag' });
-      expect(BASE_TILES).toContain(game.nextTile);
+      expect(PRIMARY_TILES).toContain(game.nextTile);
       game.move('up');
-      expect(BASE_TILES).toContain(game.nextTile);
+      expect(PRIMARY_TILES).toContain(game.nextTile);
     });
   });
 });
