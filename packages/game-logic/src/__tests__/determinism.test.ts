@@ -1,5 +1,7 @@
+import { describe, test, expect } from 'vitest';
 import { ThreesGame } from '../game';
 import { createRng } from '@threes/rng';
+import { R1 } from '../color';
 
 describe('deterministic RNG', () => {
   test('createRng produces identical sequence for same seed', () => {
@@ -43,7 +45,23 @@ describe('deterministic RNG', () => {
     expect(states1).toEqual(states2);
   });
 
-  test('bag generator is deterministic', () => {
+  test('nextTile is always R1 and deterministic across replays', () => {
+    const game1 = new ThreesGame({ seed: 123 });
+    const game2 = new ThreesGame({ seed: 123 });
+
+    expect(game1.nextTile).toBe(R1);
+    expect(game2.nextTile).toBe(R1);
+
+    const dirs = ['up', 'left', 'down', 'right', 'up'] as const;
+    for (const dir of dirs) {
+      game1.move(dir);
+      game2.move(dir);
+      expect(game1.nextTile).toBe(game2.nextTile);
+      expect(game1.nextTile).toBe(R1);
+    }
+  });
+
+  test('bag strategy is deterministic (always R1)', () => {
     const game1 = new ThreesGame({ seed: 123, nextTileStrategy: 'bag' });
     const game2 = new ThreesGame({ seed: 123, nextTileStrategy: 'bag' });
 

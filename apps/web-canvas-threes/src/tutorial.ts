@@ -1,12 +1,11 @@
 /**
- * Tutorial mode for the Threes game.
+ * Tutorial mode for the shade-based tile game.
  *
- * Guides the player through core mechanics in 5 stages:
- *   1. "Swipe anywhere to move the board"         — 2 yellows, no spawns
- *   2. "Walls help you merge (keep swiping)"       — gray border shown
- *   3. "Merge any 2 of the same for more colors"   — border gone, 2nd green spawns
- *   4. "Every swipe adds another color"             — normal spawning begins
- *   5. "Each white dot gets you more points!"       — continue button, no game over
+ * Guides the player through core mechanics in 4 stages:
+ *   1. "Swipe anywhere to move the board"         — 2 R1 tiles, no spawns
+ *   2. "Walls help you merge (keep swiping)"       — border shown
+ *   3. "Merge matching shades to level up!"        — R2 created, spawn begins
+ *   4. "Keep merging for new colors!"              — continue button
  */
 
 import {
@@ -14,11 +13,8 @@ import {
   applyMove,
   selectSpawnPosition,
   resolveConfig,
-  encodeTile,
-  tileTier,
-  YELLOW_IDX,
-  GREEN_IDX,
-  BASE_TILES,
+  R1,
+  BASE_TILE,
   type Grid,
   type Direction,
   type CellValue,
@@ -31,16 +27,14 @@ import {
 export type TutorialStage =
   | 'swipe'
   | 'wall'
-  | 'merge_yellows'
-  | 'normal'
-  | 'secondary';
+  | 'merge'
+  | 'continue';
 
 const HEADERS: Record<TutorialStage, string> = {
   swipe: 'Swipe anywhere to move the board',
   wall: 'Walls help you merge (keep swiping)',
-  merge_yellows: 'Merge any 2 of the same for more colors',
-  normal: 'Every swipe adds another color',
-  secondary: 'Each white dot gets you more points!',
+  merge: 'Merge matching shades to level up!',
+  continue: 'Keep merging for new colors!',
 };
 
 /* ── State ────────────────────────────────────────────── */
@@ -53,13 +47,10 @@ export interface TutorialState {
   nextTile: CellValue;
 }
 
-const YELLOW = encodeTile(YELLOW_IDX, 0);
-const GREEN = encodeTile(GREEN_IDX, 0);
-
 export function createTutorialState(): TutorialState {
   const grid = createEmptyGrid(4);
-  grid[2][2] = YELLOW;
-  grid[3][3] = YELLOW;
+  grid[2][2] = R1;
+  grid[3][3] = R1;
 
   return {
     active: true,
@@ -81,11 +72,11 @@ export function tutorialShowBorder(state: TutorialState): boolean {
 }
 
 export function tutorialShowNextTile(_state: TutorialState): boolean {
-  return false; // next tile preview is always hidden during tutorial
+  return false;
 }
 
 export function tutorialShowContinue(state: TutorialState): boolean {
-  return state.stage === 'secondary';
+  return state.stage === 'continue';
 }
 
 /* ── Simple RNG (no need for seedable here) ───────────── */
@@ -97,13 +88,8 @@ function rng(): number {
   return _rngState / 0x100000000;
 }
 
-function randomBaseTile(): CellValue {
-  return BASE_TILES[Math.floor(rng() * BASE_TILES.length)];
-}
-
 /* ── Helpers ──────────────────────────────────────────── */
 
-/** Does any non-empty tile sit on the leading edge for the given direction? */
 function hasEdgeTile(grid: Grid, direction: Direction): boolean {
   const n = grid.length;
   switch (direction) {
@@ -123,55 +109,11 @@ function hasEdgeTile(grid: Grid, direction: Direction): boolean {
   return false;
 }
 
-/**
- * Place a green tile on the spawn edge (opposite of swipe direction)
- * aligned with the merge position's row or column.
- */
-function spawnGreenAligned(
-  grid: Grid,
-  direction: Direction,
-  mergeRow: number,
-  mergeCol: number,
-): { row: number; col: number } | null {
-  const n = grid.length;
-  let row = 0;
-  let col = 0;
-
-  switch (direction) {
-    case 'left':  row = mergeRow; col = n - 1; break;
-    case 'right': row = mergeRow; col = 0;     break;
-    case 'up':    row = n - 1;   col = mergeCol; break;
-    case 'down':  row = 0;       col = mergeCol; break;
-  }
-
-  if (grid[row][col] === 0) return { row, col };
-
-  // Fallback: any empty cell on the spawn edge
-  const edgeCells: { row: number; col: number }[] = [];
-  switch (direction) {
-    case 'left':
-      for (let r = 0; r < n; r++) if (grid[r][n - 1] === 0) edgeCells.push({ row: r, col: n - 1 });
-      break;
-    case 'right':
-      for (let r = 0; r < n; r++) if (grid[r][0] === 0) edgeCells.push({ row: r, col: 0 });
-      break;
-    case 'up':
-      for (let c = 0; c < n; c++) if (grid[n - 1][c] === 0) edgeCells.push({ row: n - 1, col: c });
-      break;
-    case 'down':
-      for (let c = 0; c < n; c++) if (grid[0][c] === 0) edgeCells.push({ row: 0, col: c });
-      break;
-  }
-  return edgeCells.length > 0 ? edgeCells[Math.floor(rng() * edgeCells.length)] : null;
-}
-
-/** Spawn config for tutorial (reused) */
 const SPAWN_CONFIG: GameConfig = resolveConfig({
   gridSize: 4,
   spawnOnlyOnChangedLine: true,
 });
 
-/** Spawn a base tile on the appropriate edge, appending the event. */
 function doSpawn(
   state: TutorialState,
   direction: Direction,
@@ -192,7 +134,7 @@ function doSpawn(
       value: state.nextTile,
     });
   }
-  state.nextTile = randomBaseTile();
+  state.nextTile = BASE_TILE;
 }
 
 /* ── Main move handler ────────────────────────────────── */
@@ -219,46 +161,20 @@ export function tutorialMove(
       }
       break;
 
-    case 'wall': {
-      const greenMerge = mergeEvents.find((e: MoveEvent) => e.value === GREEN);
-      if (greenMerge) {
-        state.stage = 'merge_yellows';
-        const pos = spawnGreenAligned(
-          newGrid,
-          direction,
-          greenMerge.to.row,
-          greenMerge.to.col,
-        );
-        if (pos) {
-          state.grid[pos.row][pos.col] = GREEN;
-          state.lastMoveEvents.push({
-            type: 'spawn',
-            to: pos,
-            value: GREEN,
-          });
-        }
+    case 'wall':
+      if (mergeEvents.length > 0) {
+        state.stage = 'merge';
+        state.nextTile = BASE_TILE;
+        doSpawn(state, direction, changedLines);
       }
       break;
-    }
 
-    case 'merge_yellows': {
-      // Greens merged → produces teal (tier 2)
-      const secondaryMerge = mergeEvents.find((e: MoveEvent) => tileTier(e.value) >= 2);
-      if (secondaryMerge) {
-        state.stage = 'normal';
-        state.nextTile = randomBaseTile();
-      }
-      break;
-    }
-
-    case 'normal': {
+    case 'merge':
       doSpawn(state, direction, changedLines);
-      // After one move with spawning, advance to the final stage
-      state.stage = 'secondary';
+      state.stage = 'continue';
       break;
-    }
 
-    case 'secondary':
+    case 'continue':
       doSpawn(state, direction, changedLines);
       break;
   }

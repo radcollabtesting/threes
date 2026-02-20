@@ -1,12 +1,9 @@
+import { describe, test, expect } from 'vitest';
 import { selectSpawnPosition, getSpawnEdgeCells } from '../spawn';
 import { resolveConfig } from '../config';
 import { createRng } from '@threes/rng';
-import { CYAN, MAGENTA, YELLOW } from '../color';
+import { R1, R2, R3 } from '../color';
 import type { Grid } from '../types';
-
-const C = CYAN;
-const M = MAGENTA;
-const Y = YELLOW;
 
 describe('getSpawnEdgeCells', () => {
   test('swipe left => right edge (col 3)', () => {
@@ -39,10 +36,10 @@ describe('selectSpawnPosition', () => {
 
   test('picks from changed-line candidates on spawn edge', () => {
     const grid: Grid = [
-      [C, 0, 0, 0],
-      [0, 0, 0, M],
-      [0, 0, 0, 0],
-      [0, 0, 0, 0],
+      [R1, 0,  0,  0],
+      [0,  0,  0,  R1],
+      [0,  0,  0,  0],
+      [0,  0,  0,  0],
     ];
     const changedLines = new Set([0]);
     const rng = createRng(42);
@@ -54,10 +51,10 @@ describe('selectSpawnPosition', () => {
 
   test('falls back to any empty edge cell when no changed-line candidates', () => {
     const grid: Grid = [
-      [0, 0, 0, C],
-      [0, 0, 0, M],
-      [0, 0, 0, 0],
-      [0, 0, 0, 0],
+      [0,  0,  0,  R1],
+      [0,  0,  0,  R1],
+      [0,  0,  0,  0],
+      [0,  0,  0,  0],
     ];
     const changedLines = new Set([0, 1]);
     const rng = createRng(42);
@@ -69,10 +66,10 @@ describe('selectSpawnPosition', () => {
 
   test('returns null when board is completely full', () => {
     const grid: Grid = [
-      [C, M, Y, C],
-      [Y, C, M, Y],
-      [M, Y, C, M],
-      [C, M, Y, C],
+      [R1, R2, R3, R1],
+      [R3, R1, R2, R3],
+      [R2, R3, R1, R2],
+      [R1, R2, R3, R1],
     ];
     const changedLines = new Set([0]);
     const rng = createRng(42);

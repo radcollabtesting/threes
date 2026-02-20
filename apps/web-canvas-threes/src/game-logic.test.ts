@@ -7,30 +7,29 @@ import { describe, test, expect } from 'vitest';
 import { ThreesGame, canMerge, applyMove, type Grid } from '@threes/game-logic';
 
 describe('shared game-logic (vitest)', () => {
-  test('canMerge rules work (same-color matching)', () => {
-    expect(canMerge(1, 1)).toBe(true);   // Cyan + Cyan → can merge
-    expect(canMerge(2, 2)).toBe(true);   // Magenta + Magenta → can merge
-    expect(canMerge(1, 2)).toBe(false);  // Cyan + Magenta → blocked (different colors)
+  test('canMerge rules work (same-value matching)', () => {
+    expect(canMerge(1, 1)).toBe(true);   // R1 + R1 → can merge
+    expect(canMerge(2, 2)).toBe(true);   // R2 + R2 → can merge
+    expect(canMerge(1, 2)).toBe(false);  // R1 + R2 → blocked (different values)
   });
 
   test('one-step movement', () => {
     const grid: Grid = [
-      [0, 0, 0, 3],
+      [0, 0, 0, 1],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
     ];
     const { newGrid } = applyMove(grid, 'left');
-    expect(newGrid[0]).toEqual([0, 0, 3, 0]);
+    expect(newGrid[0]).toEqual([0, 0, 1, 0]);
   });
 
   test('fixture mode loads design board', () => {
     const game = new ThreesGame({ fixtureMode: true });
-    // Fixture: [C, M, _, Y] / [C, _, _, Y] with next = MAGENTA
-    // C=1, M=2, Y=3
-    expect(game.grid[0]).toEqual([1, 2, 0, 3]);
-    expect(game.grid[1]).toEqual([1, 0, 0, 3]);
-    expect(game.nextTile).toBe(2);
+    // Fixture: [R1, R1, _, R1] / [R1, _, _, R1]
+    expect(game.grid[0]).toEqual([1, 1, 0, 1]);
+    expect(game.grid[1]).toEqual([1, 0, 0, 1]);
+    expect(game.nextTile).toBe(1); // always R1
   });
 
   test('deterministic seed reproducibility', () => {

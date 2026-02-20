@@ -1,13 +1,11 @@
+import { describe, test, expect } from 'vitest';
 import { ThreesGame } from '../game';
-import {
-  CYAN, MAGENTA, YELLOW, BASE_TILES,
-  tileColorIndex, tileTier,
-  BLUE_IDX, RED_IDX, GREEN_IDX,
-} from '../color';
+import { R1, R2, BASE_TILES } from '../color';
+import { scoreTile } from '../score';
 
 describe('ThreesGame', () => {
   describe('initialization', () => {
-    test('default config creates a playing game with 3-5 start tiles', () => {
+    test('default config creates a playing game with 2-5 start tiles', () => {
       const game = new ThreesGame();
       expect(game.status).toBe('playing');
       expect(game.moveCount).toBe(0);
@@ -15,23 +13,24 @@ describe('ThreesGame', () => {
       expect(game.grid[0].length).toBe(4);
 
       const count = game.grid.flat().filter(v => v > 0).length;
-      expect(count).toBeGreaterThanOrEqual(3);
+      expect(count).toBeGreaterThanOrEqual(2);
       expect(count).toBeLessThanOrEqual(5);
 
+      // All starting tiles should be R1 (the only spawnable tile)
       for (const v of game.grid.flat()) {
-        if (v > 0) expect(BASE_TILES).toContain(v);
+        if (v > 0) expect(v).toBe(R1);
       }
     });
 
-    test('fixture mode loads color reference board', () => {
+    test('fixture mode loads reference board', () => {
       const game = new ThreesGame({ fixtureMode: true });
       expect(game.grid).toEqual([
-        [CYAN, MAGENTA, 0, YELLOW],
-        [CYAN, 0, 0, YELLOW],
+        [R1, R1, 0, R1],
+        [R1, 0, 0, R1],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
       ]);
-      expect(game.nextTile).toBe(MAGENTA);
+      expect(game.nextTile).toBe(R1);
     });
   });
 
@@ -45,31 +44,27 @@ describe('ThreesGame', () => {
 
     test('valid move spawns a tile and draws new nextTile', () => {
       const game = new ThreesGame({ fixtureMode: true });
-      expect(game.nextTile).toBe(MAGENTA);
+      expect(game.nextTile).toBe(R1);
 
       game.move('up');
 
-      // After merge, primaries exist on board so progressive may return primary
-      expect(game.nextTile).toBeGreaterThan(0);
+      // nextTile is always R1 in the simplified system
+      expect(game.nextTile).toBe(R1);
     });
 
-    test('fixture: swipe up merges adjacent same-color tiles', () => {
+    test('fixture: swipe up merges adjacent R1 pairs into R2', () => {
       const game = new ThreesGame({ fixtureMode: true });
-      // Board: [C, M, _, Y]
-      //        [C, _, _, Y]
-      // Swipe up: C(1,0) + C(0,0) → primary, Y(1,3) + Y(0,3) → primary
+      // Board: [R1, R1, _,  R1]
+      //        [R1, _,  _,  R1]
+      // Swipe up: R1(1,0) + R1(0,0) → R2, R1(1,3) + R1(0,3) → R2
       game.move('up');
       const g = game.grid;
-      // Col 0: two Cyans merged → a primary (tier 1)
-      expect(tileTier(g[0][0])).toBe(1);
-      const ci0 = tileColorIndex(g[0][0]);
-      expect([BLUE_IDX, RED_IDX, GREEN_IDX]).toContain(ci0);
-      // Col 3: two Yellows merged → a primary (tier 1)
-      expect(tileTier(g[0][3])).toBe(1);
-      const ci3 = tileColorIndex(g[0][3]);
-      expect([BLUE_IDX, RED_IDX, GREEN_IDX]).toContain(ci3);
-      // Magenta stays
-      expect(g[0][1]).toBe(MAGENTA);
+      // Col 0: two R1s merged → R2
+      expect(g[0][0]).toBe(R2);
+      // Col 3: two R1s merged → R2
+      expect(g[0][3]).toBe(R2);
+      // R1 at (0,1) stays (nothing to merge with above)
+      expect(g[0][1]).toBe(R1);
     });
   });
 
@@ -95,8 +90,20 @@ describe('ThreesGame', () => {
       const game = new ThreesGame();
       expect(game.score).toBeGreaterThan(0);
       const count = game.grid.flat().filter(v => v > 0).length;
-      // All base tiles are tier 0 → 3 pts each
-      expect(game.score).toBe(count * 3);
+      // All starting tiles are R1 → score = 3^(0+1) = 3 each
+      expect(game.score).toBe(count * scoreTile(R1));
+    });
+
+    test('R1 scores 3, R2 scores 9, R3 scores 27', () => {
+      expect(scoreTile(R1)).toBe(3);
+      expect(scoreTile(R2)).toBe(9);
+      expect(scoreTile(3)).toBe(27);  // R3
+      expect(scoreTile(4)).toBe(81);  // G1
+      expect(scoreTile(5)).toBe(243); // G2
+      expect(scoreTile(6)).toBe(729); // G3
+      expect(scoreTile(7)).toBe(2187);  // B1
+      expect(scoreTile(8)).toBe(6561);  // B2
+      expect(scoreTile(9)).toBe(19683); // B3
     });
   });
 
@@ -160,26 +167,24 @@ describe('ThreesGame', () => {
     });
   });
 
-  describe('progressive spawning', () => {
-    test('default strategy is progressive', () => {
+  describe('spawning', () => {
+    test('only R1 tiles spawn (all strategies produce R1)', () => {
       const game = new ThreesGame({ seed: 1 });
-      // With only base tiles on board, nextTile should be a base tile
-      expect(BASE_TILES).toContain(game.nextTile);
+      expect(game.nextTile).toBe(R1);
     });
 
-    test('initial nextTile is always a base tile (no primaries on board yet)', () => {
-      // Before any merges, only base tiles should spawn
+    test('nextTile is always R1 regardless of board state', () => {
       for (let s = 1; s <= 5; s++) {
         const game = new ThreesGame({ seed: s });
-        expect(BASE_TILES).toContain(game.nextTile);
+        expect(game.nextTile).toBe(R1);
       }
     });
 
-    test('bag strategy still works when explicitly set', () => {
+    test('bag strategy still works when explicitly set (always R1)', () => {
       const game = new ThreesGame({ seed: 42, nextTileStrategy: 'bag' });
-      expect(BASE_TILES).toContain(game.nextTile);
+      expect(game.nextTile).toBe(R1);
       game.move('up');
-      expect(BASE_TILES).toContain(game.nextTile);
+      expect(game.nextTile).toBe(R1);
     });
   });
 });

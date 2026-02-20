@@ -1,16 +1,16 @@
 /**
- * Canvas renderer for the color mixing game.
+ * Canvas renderer for the shade-based tile game.
  *
  * Draws the board, tiles, next-tile preview, score, and game-over overlay.
- * Tile colors are computed dynamically from the color encoding system.
+ * Tile colors are computed dynamically from the color system, with dark/light
+ * mode support (colors reverse direction within each family).
  */
 
-import { scoreTile, tileHex, tileTextColor, tileLabel, tileDisplayDots, getMergePartners, encodeTile, canMerge, tileColorIndex, tileDots, mergeResult, GRAY_IDX, grayHasValidMix, type CellValue, type Grid, type Direction, type Position } from '@threes/game-logic';
+import { scoreTile, tileHex, tileTextColor, tileLabel, tileDisplayDots, getMergePartners, canMerge, type CellValue, type Grid, type Direction, type Position } from '@threes/game-logic';
 import { COLORS, SIZES, BOARD, ANIMATION, BUTTON, SCORE_LIST, DARK_THEME, LIGHT_THEME, type ThemeColors } from '@threes/design-tokens';
 import type { AnimState } from './animation';
 import type { DragState, TilePreview } from './drag';
 import type { ScoreEntry } from './score-history';
-import type { MixState } from './mix-state';
 
 export interface GameOverData {
   currentScore: number;
@@ -26,7 +26,7 @@ export interface TutorialRenderInfo {
 }
 
 interface MergeIndicator {
-  colorIndex: number;
+  tileValue: CellValue;
   blocked: boolean;
 }
 
@@ -45,10 +45,6 @@ export class Renderer {
   private _boardY = 0;
   private _newGameBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
   private _continueBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
-  /** Mix button bounds keyed by "row,col" */
-  private _mixBtnBounds: Map<string, { x: number; y: number; w: number; h: number }> = new Map();
-  private _confirmBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
-  private _cancelBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
 
   /** When true, color letter labels are shown on tiles. */
   colorBlindMode = false;
@@ -82,21 +78,6 @@ export class Renderer {
     return this._continueBtnBounds;
   }
 
-  /** Returns mix button bounds map for hit testing */
-  get mixButtonBounds(): Map<string, { x: number; y: number; w: number; h: number }> {
-    return this._mixBtnBounds;
-  }
-
-  /** Returns the confirm button bounds in CSS px, or null if not rendered. */
-  get confirmButtonBounds(): { x: number; y: number; w: number; h: number } | null {
-    return this._confirmBtnBounds;
-  }
-
-  /** Returns the cancel button bounds in CSS px, or null if not rendered. */
-  get cancelButtonBounds(): { x: number; y: number; w: number; h: number } | null {
-    return this._cancelBtnBounds;
-  }
-
   /**
    * Hit-test a CSS coordinate against the grid, returning the cell position
    * or null if outside the board.
@@ -117,21 +98,6 @@ export class Renderer {
         if (clientX >= x && clientX <= x + tw && clientY >= y && clientY <= y + th) {
           return { row: r, col: c };
         }
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Hit-test a CSS coordinate against any visible Mix button.
-   * Returns the Gray tile's position or null.
-   */
-  hitTestMixButton(clientX: number, clientY: number): Position | null {
-    for (const [key, bounds] of this._mixBtnBounds) {
-      if (clientX >= bounds.x && clientX <= bounds.x + bounds.w &&
-          clientY >= bounds.y && clientY <= bounds.y + bounds.h) {
-        const [r, c] = key.split(',').map(Number);
-        return { row: r, col: c };
       }
     }
     return null;
@@ -177,8 +143,6 @@ export class Renderer {
     gameOverData?: GameOverData | null,
     currentScore?: number,
     tutorialInfo?: TutorialRenderInfo | null,
-    mixState?: MixState | null,
-    multipliers?: number[][] | null,
   ): void {
     const ctx = this.ctx;
     const s = this._scale;
@@ -260,120 +224,13 @@ export class Renderer {
       (drag.phase === 'dragging' || drag.phase === 'snapping');
 
     if (isDragActive) {
-      this.drawDragTiles(drag, bx, by, tw, th, gx, gy, br, s, multipliers);
+      this.drawDragTiles(drag, bx, by, tw, th, gx, gy, br, s);
     } else {
-      this.drawStaticTiles(grid, anim, bx, by, tw, th, gx, gy, br, s, multipliers);
-    }
-
-    // ── Mix mode UI ──────────────────────────────────────
-    this._mixBtnBounds.clear();
-    this._confirmBtnBounds = null;
-    this._cancelBtnBounds = null;
-    const mixActive = mixState && mixState.phase !== 'idle';
-
-    if (!isDragActive && !gameOver && !tutorialInfo) {
-      if (mixActive && mixState) {
-        // Draw mix prompt text above board
-        const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-        ctx.fillStyle = theme.uiText;
-        ctx.font = `bold ${16 * s}px ${font}`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText(mixState.promptText, vw / 2, this._boardY - 12 * s);
-
-        // Dim the entire board, then brighten valid targets
-        ctx.fillStyle = theme.mixOverlay;
-        ctx.fillRect(bx, by, BOARD.width * s, BOARD.height * s);
-
-        if (mixState.phase === 'previewing' && mixState.grayPos && mixState.previewResultValue !== null) {
-          // ── Preview mode: show result on Gray, dim sources ──
-          // Draw result tile at Gray position
-          const gx2 = bx + mixState.grayPos.col * (tw + gx);
-          const gy2 = by + mixState.grayPos.row * (th + gy);
-          this.drawTile(gx2, gy2, tw, th, br, s, mixState.previewResultValue, 1, 1);
-          // Green border on result preview
-          this.drawSelectionBorder(gx2, gy2, tw, th, br, s, '#00FF88');
-
-          // Dim source tiles (show them faded to indicate they'll be consumed)
-          if (mixState.firstSelection) {
-            const fx = bx + mixState.firstSelection.col * (tw + gx);
-            const fy = by + mixState.firstSelection.row * (th + gy);
-            const fv = grid[mixState.firstSelection.row][mixState.firstSelection.col];
-            this.drawTile(fx, fy, tw, th, br, s, fv, 1, 0.4);
-          }
-          if (mixState.secondSelection) {
-            const sx = bx + mixState.secondSelection.col * (tw + gx);
-            const sy = by + mixState.secondSelection.row * (th + gy);
-            const sv = grid[mixState.secondSelection.row][mixState.secondSelection.col];
-            this.drawTile(sx, sy, tw, th, br, s, sv, 1, 0.4);
-          }
-
-          // ── Confirm / Cancel buttons below the board ──
-          this.drawConfirmCancelButtons(vw, by, s);
-
-        } else {
-          // ── Selection mode (selectingFirst / selectingSecond) ──
-          // Highlight Gray tile
-          if (mixState.grayPos) {
-            const gx2 = bx + mixState.grayPos.col * (tw + gx);
-            const gy2 = by + mixState.grayPos.row * (th + gy);
-            this.drawTile(gx2, gy2, tw, th, br, s, grid[mixState.grayPos.row][mixState.grayPos.col], 1, 0.6);
-          }
-
-          // Highlight first selected tile
-          if (mixState.firstSelection) {
-            const fx = bx + mixState.firstSelection.col * (tw + gx);
-            const fy = by + mixState.firstSelection.row * (th + gy);
-            const fv = grid[mixState.firstSelection.row][mixState.firstSelection.col];
-            this.drawTile(fx, fy, tw, th, br, s, fv, 1, 1);
-            this.drawSelectionBorder(fx, fy, tw, th, br, s, '#00FF88');
-          }
-
-          // Highlight valid targets with glowing border
-          for (const target of mixState.validTargets) {
-            const tx2 = bx + target.col * (tw + gx);
-            const ty2 = by + target.row * (th + gy);
-            const tv = grid[target.row][target.col];
-            this.drawTile(tx2, ty2, tw, th, br, s, tv, 1, 1);
-            this.drawSelectionBorder(tx2, ty2, tw, th, br, s, 'rgba(255,255,255,0.8)', 2);
-          }
-        }
-      } else if (!anim.mixSlide) {
-        // Draw "Mix" buttons on Gray tiles (when not in mix mode or animating)
-        this.drawMixButtons(grid, bx, by, tw, th, gx, gy, br, s);
-      }
-    }
-
-    // ── Ripple animation (catalyst mix) ─────────────────
-    if (anim.ripple && anim.ripple.progress < 1) {
-      const rp = anim.ripple;
-      const rx = bx + rp.col * (tw + gx) + tw / 2;
-      const ry = by + rp.row * (th + gy) + th / 2;
-      const maxRadius = Math.max(tw, th) * 1.5;
-      const radius = maxRadius * easeOut(rp.progress);
-      const alpha = 1 - rp.progress;
-
-      ctx.save();
-      ctx.strokeStyle = rp.color;
-      ctx.lineWidth = 3 * s;
-      ctx.globalAlpha = alpha * 0.7;
-      ctx.beginPath();
-      ctx.arc(rx, ry, radius, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Second smaller ring
-      if (rp.progress > 0.1) {
-        const r2 = maxRadius * easeOut(Math.max(0, rp.progress - 0.15));
-        ctx.globalAlpha = alpha * 0.4;
-        ctx.beginPath();
-        ctx.arc(rx, ry, r2, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      ctx.restore();
+      this.drawStaticTiles(grid, anim, bx, by, tw, th, gx, gy, br, s);
     }
 
     // ── Next tile preview ─────────────────────────────────
-    const hideNextTile = (tutorialInfo?.hideNextTile ?? false) || mixActive;
+    const hideNextTile = tutorialInfo?.hideNextTile ?? false;
 
     if (!hideNextTile) {
       const nextY = by + BOARD.height * s + SIZES.nextTileGapFromBoard * s;
@@ -443,9 +300,7 @@ export class Renderer {
         for (let c = 0; c < SIZES.gridSize; c++) {
           const val = grid[r][c];
           if (val === 0) continue;
-          const base = scoreTile(val);
-          const mixCount = multipliers?.[r]?.[c] ?? 0;
-          const pts = mixCount > 0 ? base * Math.pow(2, mixCount) : base;
+          const pts = scoreTile(val);
           const tx = bx + c * (tw + gx) + tw / 2;
           const ty = by + r * (th + gy) + th * 0.25;
           ctx.font = `bold ${14 * s}px ${scoreFont}`;
@@ -543,16 +398,11 @@ export class Renderer {
     tw: number, th: number,
     gx: number, gy: number,
     br: number, s: number,
-    multipliers?: number[][] | null,
   ): void {
     for (let r = 0; r < SIZES.gridSize; r++) {
       for (let c = 0; c < SIZES.gridSize; c++) {
         const val = grid[r][c];
         if (val === 0) continue;
-
-        // Hide result tile at mix target during slide animation
-        if (anim.mixSlide && anim.mixSlide.progress < 1 &&
-            r === anim.mixSlide.targetRow && c === anim.mixSlide.targetCol) continue;
 
         const key = `${r},${c}`;
         let x = bx + c * (tw + gx);
@@ -596,44 +446,10 @@ export class Renderer {
 
         this.drawTile(x, y, tw, th, br, s, val, tileScale, alpha);
 
-        // Draw catalyst mix multiplier badge (top-left corner)
-        const mult = multipliers?.[r]?.[c] ?? 0;
-        if (mult > 0) {
-          this.drawMultiplierBadge(x, y, tw, s, mult);
-        }
-
         // Draw merge direction indicators based on grid neighbours
         const indicators = this.getMergeIndicators(grid, r, c);
         this.drawMergeIndicators(x, y, tw, th, s, indicators);
       }
-    }
-
-    // Draw mix slide source tiles (sliding toward gray target)
-    if (anim.mixSlide && anim.mixSlide.progress < 1) {
-      const ms = anim.mixSlide;
-      const p = easeOut(ms.progress);
-      const targetX = bx + ms.targetCol * (tw + gx);
-      const targetY = by + ms.targetRow * (th + gy);
-
-      // Fade and shrink as tiles approach target
-      const alpha = 1 - p * 0.6;
-      const scale = 1 - p * 0.3;
-
-      // Source 1
-      const s1x = bx + ms.src1Col * (tw + gx);
-      const s1y = by + ms.src1Row * (th + gy);
-      this.drawTile(
-        s1x + (targetX - s1x) * p, s1y + (targetY - s1y) * p,
-        tw, th, br, s, ms.src1Value as CellValue, scale, alpha,
-      );
-
-      // Source 2
-      const s2x = bx + ms.src2Col * (tw + gx);
-      const s2y = by + ms.src2Row * (th + gy);
-      this.drawTile(
-        s2x + (targetX - s2x) * p, s2y + (targetY - s2y) * p,
-        tw, th, br, s, ms.src2Value as CellValue, scale, alpha,
-      );
     }
   }
 
@@ -646,7 +462,6 @@ export class Renderer {
     tw: number, th: number,
     gx: number, gy: number,
     br: number, s: number,
-    multipliers?: number[][] | null,
   ): void {
     const preview = drag.preview!;
     const progress = drag.progress;
@@ -669,8 +484,6 @@ export class Renderer {
         const x = bx + tp.fromCol * (tw + gx) + offsetX;
         const y = by + tp.fromRow * (th + gy) + offsetY;
         this.drawTile(x, y, tw, th, br, s, tp.value, 1, 1);
-        const mult = multipliers?.[tp.fromRow]?.[tp.fromCol] ?? 0;
-        if (mult > 0) this.drawMultiplierBadge(x, y, tw, s, mult);
         const indicators = this.getMergeIndicators(virtualGrid, tp.fromRow, tp.fromCol);
         this.drawMergeIndicators(x, y, tw, th, s, indicators);
       }
@@ -690,8 +503,6 @@ export class Renderer {
       const x = bx + tp.fromCol * (tw + gx);
       const y = by + tp.fromRow * (th + gy);
       this.drawTile(x, y, tw, th, br, s, tp.value, 1, 1);
-      const mult = multipliers?.[tp.fromRow]?.[tp.fromCol] ?? 0;
-      if (mult > 0) this.drawMultiplierBadge(x, y, tw, s, mult);
       const indicators = this.getMergeIndicators(virtualGrid, tp.fromRow, tp.fromCol);
       this.drawMergeIndicators(x, y, tw, th, s, indicators);
     }
@@ -707,8 +518,6 @@ export class Renderer {
       const y = fromY + (toY - fromY) * progress;
 
       this.drawTile(x, y, tw, th, br, s, tp.value, 1, 1);
-      const mult = multipliers?.[tp.fromRow]?.[tp.fromCol] ?? 0;
-      if (mult > 0) this.drawMultiplierBadge(x, y, tw, s, mult);
       const indicators = this.getMergeIndicators(virtualGrid, tp.fromRow, tp.fromCol);
       this.drawMergeIndicators(x, y, tw, th, s, indicators);
     }
@@ -743,9 +552,9 @@ export class Renderer {
 
       if (ow > 0 && oh > 0) {
         const resultValue = ev.value;
-        const resultColor = tileHex(resultValue);
+        const resultColor = tileHex(resultValue, this.darkMode);
         const resultLabel = tileLabel(resultValue);
-        const resultTextColor = tileTextColor(resultValue);
+        const resultTextColor = tileTextColor(resultValue, this.darkMode);
         const overlapBr = Math.min(br, ow / 2, oh / 2);
 
         const ctx = this.ctx;
@@ -796,8 +605,8 @@ export class Renderer {
     alpha: number,
   ): void {
     const ctx = this.ctx;
-    const fill = tileHex(value);
-    const text = tileTextColor(value);
+    const fill = tileHex(value, this.darkMode);
+    const text = tileTextColor(value, this.darkMode);
     const label = tileLabel(value);
 
     ctx.save();
@@ -840,7 +649,7 @@ export class Renderer {
       ctx.fillText(label, x + w / 2, y + h / 2);
     }
 
-    // Draw white dots in top-right corner (scoring tier indicator)
+    // Draw white dots in top-right corner (shade indicator)
     const dots = tileDisplayDots(value);
     if (dots > 0) {
       const dotRadius = 3 * s;
@@ -871,8 +680,8 @@ export class Renderer {
     const result: MergeIndicatorSet = { left: [], right: [], top: [], bottom: [] };
     if (value === 0) return result;
 
-    const addUnique = (arr: MergeIndicator[], ci: number, blocked: boolean) => {
-      if (!arr.some(i => i.colorIndex === ci)) arr.push({ colorIndex: ci, blocked });
+    const addUnique = (arr: MergeIndicator[], val: CellValue, blocked: boolean) => {
+      if (!arr.some(i => i.tileValue === val)) arr.push({ tileValue: val, blocked });
     };
 
     // Scan left (from col-1 toward 0)
@@ -880,7 +689,7 @@ export class Renderer {
     for (let c = col - 1; c >= 0; c--) {
       const other = grid[row][c];
       if (other !== 0) {
-        if (canMerge(value, other)) addUnique(result.left, tileColorIndex(other), blocked);
+        if (canMerge(value, other)) addUnique(result.left, other, blocked);
         blocked = true;
       }
     }
@@ -889,7 +698,7 @@ export class Renderer {
     for (let c = col + 1; c < SIZES.gridSize; c++) {
       const other = grid[row][c];
       if (other !== 0) {
-        if (canMerge(value, other)) addUnique(result.right, tileColorIndex(other), blocked);
+        if (canMerge(value, other)) addUnique(result.right, other, blocked);
         blocked = true;
       }
     }
@@ -898,7 +707,7 @@ export class Renderer {
     for (let r = row - 1; r >= 0; r--) {
       const other = grid[r][col];
       if (other !== 0) {
-        if (canMerge(value, other)) addUnique(result.top, tileColorIndex(other), blocked);
+        if (canMerge(value, other)) addUnique(result.top, other, blocked);
         blocked = true;
       }
     }
@@ -907,7 +716,7 @@ export class Renderer {
     for (let r = row + 1; r < SIZES.gridSize; r++) {
       const other = grid[r][col];
       if (other !== 0) {
-        if (canMerge(value, other)) addUnique(result.bottom, tileColorIndex(other), blocked);
+        if (canMerge(value, other)) addUnique(result.bottom, other, blocked);
         blocked = true;
       }
     }
@@ -917,8 +726,8 @@ export class Renderer {
 
   /**
    * Draw merge direction indicator lines on tile edges.
-   * Each line is 2px thick × 8px long (scaled), colored with the partner's color.
-   * Blocked indicators are drawn with black dashes over the color.
+   * Each line is 2px thick x 8px long (scaled), colored with the partner's color.
+   * Blocked indicators are drawn with 50% opacity.
    */
   private drawMergeIndicators(
     x: number, y: number, w: number, h: number, s: number,
@@ -943,7 +752,7 @@ export class Renderer {
       const totalH = count * lineL + (count - 1) * gap;
       let iy = y + (h - totalH) / 2;
       for (const ind of indicators.left) {
-        drawLine(x, iy, lineW, lineL, tileHex(encodeTile(ind.colorIndex, 0)), ind.blocked);
+        drawLine(x, iy, lineW, lineL, tileHex(ind.tileValue, this.darkMode), ind.blocked);
         iy += lineL + gap;
       }
     }
@@ -954,7 +763,7 @@ export class Renderer {
       const totalH = count * lineL + (count - 1) * gap;
       let iy = y + (h - totalH) / 2;
       for (const ind of indicators.right) {
-        drawLine(x + w - lineW, iy, lineW, lineL, tileHex(encodeTile(ind.colorIndex, 0)), ind.blocked);
+        drawLine(x + w - lineW, iy, lineW, lineL, tileHex(ind.tileValue, this.darkMode), ind.blocked);
         iy += lineL + gap;
       }
     }
@@ -965,7 +774,7 @@ export class Renderer {
       const totalW = count * lineL + (count - 1) * gap;
       let ix = x + (w - totalW) / 2;
       for (const ind of indicators.top) {
-        drawLine(ix, y, lineL, lineW, tileHex(encodeTile(ind.colorIndex, 0)), ind.blocked);
+        drawLine(ix, y, lineL, lineW, tileHex(ind.tileValue, this.darkMode), ind.blocked);
         ix += lineL + gap;
       }
     }
@@ -976,164 +785,8 @@ export class Renderer {
       const totalW = count * lineL + (count - 1) * gap;
       let ix = x + (w - totalW) / 2;
       for (const ind of indicators.bottom) {
-        drawLine(ix, y + h - lineW, lineL, lineW, tileHex(encodeTile(ind.colorIndex, 0)), ind.blocked);
+        drawLine(ix, y + h - lineW, lineL, lineW, tileHex(ind.tileValue, this.darkMode), ind.blocked);
         ix += lineL + gap;
-      }
-    }
-  }
-
-  /**
-   * Draw a catalyst mix multiplier badge ("2x", "4x", etc.) in the top-left
-   * corner of a tile.
-   */
-  private drawMultiplierBadge(
-    x: number, y: number,
-    w: number, s: number,
-    multiplier: number,
-  ): void {
-    const ctx = this.ctx;
-    const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    const text = `${multiplier}x`;
-    const fontSize = 9 * s;
-    const padX = 4 * s;
-    const padY = 2 * s;
-
-    ctx.font = `bold ${fontSize}px ${font}`;
-    const textWidth = ctx.measureText(text).width;
-    const badgeW = textWidth + padX * 2;
-    const badgeH = fontSize + padY * 2;
-    const badgeX = x + 3 * s;
-    const badgeY = y + 3 * s;
-    const badgeR = badgeH / 2;
-
-    ctx.save();
-    ctx.globalAlpha = 0.9;
-    this.roundRect(badgeX, badgeY, badgeW, badgeH, badgeR, '#FFD700');
-    ctx.restore();
-
-    ctx.fillStyle = '#000000';
-    ctx.font = `bold ${fontSize}px ${font}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, badgeX + badgeW / 2, badgeY + badgeH / 2);
-  }
-
-  /**
-   * Draw a rounded-rect selection border on a tile.
-   */
-  private drawSelectionBorder(
-    x: number, y: number,
-    w: number, h: number,
-    r: number, s: number,
-    color: string, lineWidth = 3,
-  ): void {
-    const ctx = this.ctx;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = lineWidth * s;
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
-    ctx.stroke();
-  }
-
-  /**
-   * Draw Confirm and Cancel buttons below the board during mix preview.
-   */
-  private drawConfirmCancelButtons(
-    vw: number, boardY: number, s: number,
-  ): void {
-    const ctx = this.ctx;
-    const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    const btnW = BUTTON.width * s;
-    const btnH = BUTTON.height * s;
-    const btnR = BUTTON.borderRadius * s;
-    const cx = vw / 2;
-    const baseY = boardY + BOARD.height * s + SIZES.nextTileGapFromBoard * s;
-
-    // Confirm button (green)
-    const confirmX = cx - btnW / 2;
-    const confirmY = baseY;
-    this.roundRect(confirmX, confirmY, btnW, btnH, btnR, '#00CC66');
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = `bold ${BUTTON.fontSize * s}px ${font}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('Confirm', confirmX + btnW / 2, confirmY + btnH / 2);
-    this._confirmBtnBounds = { x: confirmX, y: confirmY, w: btnW, h: btnH };
-
-    // Cancel button (below confirm, text-style)
-    const cancelY = confirmY + btnH + 12 * s;
-    const cancelH = btnH * 0.8;
-    const cancelX = cx - btnW / 2;
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = `${(BUTTON.fontSize - 2) * s}px ${font}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('Cancel', cancelX + btnW / 2, cancelY + cancelH / 2);
-    this._cancelBtnBounds = { x: cancelX, y: cancelY, w: btnW, h: cancelH };
-  }
-
-  /**
-   * Draw "Mix" pill buttons on all Gray tiles.
-   * Faded + disabled if the Gray has no valid mix combos.
-   */
-  private drawMixButtons(
-    grid: Grid,
-    bx: number, by: number,
-    tw: number, th: number,
-    gx: number, gy: number,
-    br: number, s: number,
-  ): void {
-    const ctx = this.ctx;
-    const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-
-    for (let r = 0; r < SIZES.gridSize; r++) {
-      for (let c = 0; c < SIZES.gridSize; c++) {
-        const val = grid[r][c];
-        if (val === 0) continue;
-        if (tileColorIndex(val) !== GRAY_IDX) continue;
-        // Only show Mix button on white Gray tiles (dots >= 2)
-        if (tileDots(val) < 2) continue;
-
-        const hasValidMix = grayHasValidMix(grid, { row: r, col: c });
-
-        // Position Mix button centered on tile
-        const tileX = bx + c * (tw + gx);
-        const tileY = by + r * (th + gy);
-        const btnW = 36 * s;
-        const btnH = 18 * s;
-        const btnX = tileX + (tw - btnW) / 2;
-        const btnY = tileY + (th - btnH) / 2;
-        const btnR = btnH / 2;
-
-        // Pill background (faded when disabled)
-        ctx.save();
-        ctx.globalAlpha = hasValidMix ? 0.9 : 0.3;
-        this.roundRect(btnX, btnY, btnW, btnH, btnR, '#000000');
-        ctx.restore();
-
-        // "Mix" text (faded when disabled)
-        ctx.save();
-        ctx.globalAlpha = hasValidMix ? 1 : 0.4;
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = `bold ${10 * s}px ${font}`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Mix', btnX + btnW / 2, btnY + btnH / 2);
-        ctx.restore();
-
-        // Only store bounds for hit testing if valid
-        if (hasValidMix) {
-          this._mixBtnBounds.set(`${r},${c}`, { x: btnX, y: btnY, w: btnW, h: btnH });
-        }
       }
     }
   }

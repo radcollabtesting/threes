@@ -1,137 +1,106 @@
 /**
- * Named color system with same-color merge rules.
+ * Simplified shade-based color system.
  *
- * 13 named colors across 4 tiers:
- *   Tier 0 (base):      Cyan, Magenta, Yellow
- *   Tier 1 (primary):   Blue, Red, Green
- *   Tier 2 (secondary): Orange, Violet, Indigo, Teal
- *   Tier 3 (tertiary):  Gray
+ * 9 tile levels across 3 color families (3 shades each):
+ *   Red:   R1 (1), R2 (2), R3 (3)
+ *   Green: G1 (4), G2 (5), G3 (6)
+ *   Blue:  B1 (7), B2 (8), B3 (9)
  *
- * Encoding: id = colorIndex + dots * NUM_COLORS + 1
- *   (0 is reserved for empty cells)
+ * Encoding: tile value IS the level (1–9), 0 = empty.
+ * Merge: same-value tiles → value + 1 (max = 9; B3 can't merge).
  *
- * Merge rules (deterministic same-color matching):
- *   - Two tiles of the same color and same dots merge.
- *   - Each color has a fixed result (carries dots):
- *     Cyan → Blue,  Magenta → Red,  Yellow → Green
- *     Blue → Indigo,  Red → Orange,  Green → Teal
- *     Indigo / Orange / Teal → Gray
- *   - Gray + Gray (same dots) → Gray with dots + 1.
- *   - Different colors → blocked (canMerge returns false).
+ * Light mode: colors progress dark → light within each family.
+ * Dark mode:  colors progress light → dark (opposite).
+ *
+ * When a merge crosses a color boundary (R3→G1 or G3→B1),
+ * adjacent tiles are pushed outward ("pop" effect).
  */
 
 import type { CellValue } from './types';
 
-/* ── Color indices ──────────────────────────────────────── */
+/* ── Tile constants ─────────────────────────────────────── */
 
-export const CYAN_IDX = 0;
-export const MAGENTA_IDX = 1;
-export const YELLOW_IDX = 2;
-export const BLUE_IDX = 3;
-export const RED_IDX = 4;
-export const GREEN_IDX = 5;
-export const ORANGE_IDX = 6;
-export const VIOLET_IDX = 7;
-export const CHARTREUSE_IDX = 8;
-export const TEAL_IDX = 9;
-export const TURQUOISE_IDX = 10;
-export const INDIGO_IDX = 11;
-export const GRAY_IDX = 12;
-export const BROWN_IDX = 13;
-export const NUM_COLORS = 14;
+export const R1: CellValue = 1;
+export const R2: CellValue = 2;
+export const R3: CellValue = 3;
+export const G1: CellValue = 4;
+export const G2: CellValue = 5;
+export const G3: CellValue = 6;
+export const B1: CellValue = 7;
+export const B2: CellValue = 8;
+export const B3: CellValue = 9;
 
-/* ── Encoding / Decoding ──────────────────────────────── */
+export const MAX_TILE: CellValue = 9;
 
-export function encodeTile(colorIndex: number, dots: number): CellValue {
-  return colorIndex + dots * NUM_COLORS + 1;
+/** The only tile that spawns as new cards */
+export const BASE_TILE: CellValue = R1;
+export const BASE_TILES: CellValue[] = [R1];
+
+/* ── Color family helpers ──────────────────────────────── */
+
+/** Returns 0 = Red, 1 = Green, 2 = Blue, or -1 for invalid */
+export function tileColorFamily(id: CellValue): number {
+  if (id <= 0 || id > MAX_TILE) return -1;
+  return Math.floor((id - 1) / 3);
 }
 
-export function tileColorIndex(id: CellValue): number {
-  return (id - 1) % NUM_COLORS;
+/** Returns the shade within its color family (0, 1, or 2) */
+export function tileShade(id: CellValue): number {
+  if (id <= 0 || id > MAX_TILE) return -1;
+  return (id - 1) % 3;
 }
 
-export function tileDots(id: CellValue): number {
-  return Math.floor((id - 1) / NUM_COLORS);
+/** True when merging this value crosses into the next color family */
+export function isColorTransition(value: CellValue): boolean {
+  return value === R3 || value === G3;
 }
 
-/* ── Tier (for scoring) ──────────────────────────────── */
-
-const BASE_INDICES = new Set([CYAN_IDX, MAGENTA_IDX, YELLOW_IDX]);
-const PRIMARY_INDICES = new Set([BLUE_IDX, RED_IDX, GREEN_IDX]);
-const SECONDARY_INDICES = new Set([
-  ORANGE_IDX, VIOLET_IDX, INDIGO_IDX, TEAL_IDX, BROWN_IDX,
-]);
-const TERTIARY_INDICES = new Set([GRAY_IDX]);
+/* ── Tier (level index 0–8, used by scoring) ───────────── */
 
 export function tileTier(id: CellValue): number {
-  if (id === 0) return -1;
-  const ci = tileColorIndex(id);
-  if (BASE_INDICES.has(ci)) return 0;
-  if (PRIMARY_INDICES.has(ci)) return 1;
-  if (SECONDARY_INDICES.has(ci)) return 2;
-  if (TERTIARY_INDICES.has(ci)) return 3;
-  return 0;
+  if (id <= 0) return -1;
+  if (id > MAX_TILE) return MAX_TILE - 1;
+  return id - 1;
 }
 
-/* ── Display: dots ──────────────────────────────────── */
+/* ── Display: hex colors ──────────────────────────────── */
 
-/**
- * Returns the number of white dots to display on a tile.
- * Dots indicate the tile's tier/value progression:
- *   Base (C/M/Y):        0 dots
- *   Primary (R/G/B):     1 dot
- *   Secondary (O/V/I/T): 2 dots
- *   Gray:                2 dots + 1 per gray merge
- */
-export function tileDisplayDots(id: CellValue): number {
-  if (id === 0) return 0;
-  const tier = tileTier(id);
-  if (tier <= 0) return 0;
-  if (tier <= 2) return tier;
-  // Gray (tier 3): starts at 2, +1 per gray merge
-  return 2 + tileDots(id);
-}
+/** Light mode: dark → light within each color family */
+const LIGHT_HEX: string[] = [
+  '',         // 0 placeholder
+  '#8B1A1A', // R1 – dark red
+  '#DC3545', // R2 – red
+  '#FF6B8A', // R3 – pink
+  '#1B5E20', // G1 – dark green
+  '#43A047', // G2 – green
+  '#81C784', // G3 – light green
+  '#1A237E', // B1 – dark blue
+  '#3F51B5', // B2 – blue
+  '#90CAF9', // B3 – light blue
+];
 
-/* ── Display: hex colors ─────────────────────────────── */
+/** Dark mode: reversed (light → dark within each family) */
+const DARK_HEX: string[] = [
+  '',
+  '#FF6B8A', // R1 – pink
+  '#DC3545', // R2 – red
+  '#8B1A1A', // R3 – burgundy
+  '#81C784', // G1 – light green
+  '#43A047', // G2 – green
+  '#1B5E20', // G3 – dark green
+  '#90CAF9', // B1 – light blue
+  '#3F51B5', // B2 – blue
+  '#1A237E', // B3 – dark blue
+];
 
-const HEX_MAP: string[] = [];
-HEX_MAP[CYAN_IDX] = '#87FBE9';
-HEX_MAP[MAGENTA_IDX] = '#CA4DF2';
-HEX_MAP[YELLOW_IDX] = '#F4CF5F';
-HEX_MAP[BLUE_IDX] = '#5764F5';
-HEX_MAP[RED_IDX] = '#EB5560';
-HEX_MAP[GREEN_IDX] = '#77D054';
-HEX_MAP[ORANGE_IDX] = '#E98028';
-HEX_MAP[VIOLET_IDX] = '#CA4DF2';
-HEX_MAP[CHARTREUSE_IDX] = '#77D054';
-HEX_MAP[TEAL_IDX] = '#58AC91';
-HEX_MAP[TURQUOISE_IDX] = '#5764F5';
-HEX_MAP[INDIGO_IDX] = '#964EF5';
-// Gray uses a dynamic scale (dark → light → white) — see grayHex() below.
-// HEX_MAP[GRAY_IDX] is intentionally left unset.
-HEX_MAP[BROWN_IDX] = '#995037';
-
-/**
- * Returns a gray hex that lightens with each merge.
- *   dots 0 → dark gray  (#616161)
- *   dots 1 → mid gray   (#b1b1b1)
- *   dots 2+ → white     (#FFFFFF)
- */
-const GRAY_STEPS = ['#616161', '#b1b1b1', '#FFFFFF'];
-function grayHex(dots: number): string {
-  return GRAY_STEPS[Math.min(dots, GRAY_STEPS.length - 1)];
-}
-
-export function tileHex(id: CellValue): string {
-  if (id === 0) return '#000000';
-  const ci = tileColorIndex(id);
-  if (ci === GRAY_IDX) return grayHex(tileDots(id));
-  return HEX_MAP[ci] ?? '#000000';
+export function tileHex(id: CellValue, darkMode = false): string {
+  if (id <= 0 || id > MAX_TILE) return '#000000';
+  return darkMode ? DARK_HEX[id] : LIGHT_HEX[id];
 }
 
 /** Returns a suitable text color (black or white) for readability. */
-export function tileTextColor(id: CellValue): string {
-  const hex = tileHex(id);
+export function tileTextColor(id: CellValue, darkMode = false): string {
+  const hex = tileHex(id, darkMode);
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
@@ -139,105 +108,44 @@ export function tileTextColor(id: CellValue): string {
   return luminance > 0.5 ? '#000000' : '#FFFFFF';
 }
 
-/* ── Display: labels ─────────────────────────────────── */
+/* ── Display: labels ──────────────────────────────────── */
 
-const LABEL_MAP: (string | null)[] = [];
-LABEL_MAP[CYAN_IDX] = 'C';
-LABEL_MAP[MAGENTA_IDX] = 'M';
-LABEL_MAP[YELLOW_IDX] = 'Y';
-LABEL_MAP[BLUE_IDX] = 'B';
-LABEL_MAP[RED_IDX] = 'R';
-LABEL_MAP[GREEN_IDX] = 'G';
-LABEL_MAP[ORANGE_IDX] = 'O';
-LABEL_MAP[VIOLET_IDX] = 'V';
-LABEL_MAP[INDIGO_IDX] = 'I';
-LABEL_MAP[TEAL_IDX] = 'T';
-LABEL_MAP[BROWN_IDX] = 'Br';
+const LABELS: (string | null)[] = [
+  null, 'R1', 'R2', 'R3', 'G1', 'G2', 'G3', 'B1', 'B2', 'B3',
+];
 
-/** Gray labels by dots: dark → mid → (white has no label, shows Mix instead). */
-const GRAY_LABEL = ['Dk', 'Md'];
-
-/** Returns short label for named colors, null otherwise. */
 export function tileLabel(id: CellValue): string | null {
-  if (id === 0) return null;
-  const ci = tileColorIndex(id);
-  if (ci === GRAY_IDX) return GRAY_LABEL[tileDots(id)] ?? null;
-  return LABEL_MAP[ci] ?? null;
+  if (id <= 0 || id > MAX_TILE) return null;
+  return LABELS[id];
 }
 
-/* ── Deterministic merge map: color → result color ──── */
+/* ── Display: dots (shade within color family) ─────────── */
 
-const MERGE_MAP: Record<number, number> = {
-  [CYAN_IDX]: BLUE_IDX,        // C+C → B
-  [MAGENTA_IDX]: RED_IDX,      // M+M → R
-  [YELLOW_IDX]: GREEN_IDX,     // Y+Y → G
-  [BLUE_IDX]: INDIGO_IDX,      // B+B → I
-  [RED_IDX]: ORANGE_IDX,       // R+R → O
-  [GREEN_IDX]: TEAL_IDX,       // G+G → T
-  [ORANGE_IDX]: GRAY_IDX,      // O+O → Gray
-  [VIOLET_IDX]: GRAY_IDX,      // V+V → Gray
-  [CHARTREUSE_IDX]: GRAY_IDX,  // Ch+Ch → Gray
-  [TEAL_IDX]: GRAY_IDX,        // T+T → Gray
-  [TURQUOISE_IDX]: GRAY_IDX,   // Tu+Tu → Gray
-  [INDIGO_IDX]: GRAY_IDX,      // I+I → Gray
-  [BROWN_IDX]: GRAY_IDX,       // Br+Br → Gray
-};
+export function tileDisplayDots(id: CellValue): number {
+  if (id <= 0 || id > MAX_TILE) return 0;
+  return tileShade(id);
+}
 
-/* ── Merge logic ─────────────────────────────────────── */
+/* ── Merge logic ──────────────────────────────────────── */
 
 /**
- * Two tiles can merge if they have the same color and same dots.
- * This gives the simple "match two identical tiles" rule.
+ * Two tiles can merge if they have the same value and
+ * the value is below the max (B3 can't merge further).
  */
 export function canMerge(a: CellValue, b: CellValue): boolean {
-  if (a === 0 || b === 0) return false;
-  return tileColorIndex(a) === tileColorIndex(b) && tileDots(a) === tileDots(b);
+  if (a <= 0 || b <= 0) return false;
+  return a === b && a < MAX_TILE;
 }
 
-/**
- * Returns the merged tile value. Fully deterministic — each color
- * has exactly one result color (see MERGE_MAP).
- */
-export function mergeResult(a: CellValue, b: CellValue): CellValue {
-  const ci = tileColorIndex(a);
-  const dots = tileDots(a);
-
-  // Gray + Gray (same dots) → Gray with dots + 1
-  if (ci === GRAY_IDX) {
-    return encodeTile(GRAY_IDX, dots + 1);
-  }
-
-  const nextColor = MERGE_MAP[ci];
-  if (nextColor === undefined) {
-    // Should not reach here if canMerge was checked first
-    return a;
-  }
-
-  return encodeTile(nextColor, dots);
+/** Returns the merged tile value (always input + 1). */
+export function mergeResult(a: CellValue, _b: CellValue): CellValue {
+  return a + 1;
 }
 
-/* ── Merge partners (for hint indicators) ────────────── */
+/* ── Merge partners (for hint indicators) ──────────────── */
 
-/** Returns color indices that this tile can merge with (always its own color). */
-export function getMergePartners(id: CellValue): number[] {
-  if (id === 0) return [];
-  return [tileColorIndex(id)];
+/** Returns tile values that this tile can merge with (always its own value). */
+export function getMergePartners(id: CellValue): CellValue[] {
+  if (id <= 0 || id >= MAX_TILE) return [];
+  return [id];
 }
-
-/* ── Base tile constants ─────────────────────────────── */
-
-export const CYAN = encodeTile(CYAN_IDX, 0);
-export const MAGENTA = encodeTile(MAGENTA_IDX, 0);
-export const YELLOW = encodeTile(YELLOW_IDX, 0);
-export const BASE_TILES: CellValue[] = [CYAN, MAGENTA, YELLOW];
-export const PRIMARY_TILES: CellValue[] = [
-  encodeTile(BLUE_IDX, 0),
-  encodeTile(RED_IDX, 0),
-  encodeTile(GREEN_IDX, 0),
-];
-export const SECONDARY_TILES: CellValue[] = [
-  encodeTile(ORANGE_IDX, 0),
-  encodeTile(VIOLET_IDX, 0),
-  encodeTile(INDIGO_IDX, 0),
-  encodeTile(TEAL_IDX, 0),
-];

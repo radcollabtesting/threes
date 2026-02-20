@@ -7,12 +7,11 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet, Easing } from 'react-native';
 import { COLORS, SIZES, ANIMATION } from '@threes/design-tokens';
-import { tileColors } from '@threes/design-tokens';
 import type { Grid, MoveEvent } from '@threes/game-logic';
-import { canMerge, tileColorIndex, tileHex, encodeTile } from '@threes/game-logic';
+import { canMerge, tileHex, tileTextColor, tileLabel } from '@threes/game-logic';
 
 interface MergeIndicator {
-  colorIndex: number;
+  tileValue: number;
   blocked: boolean;
 }
 
@@ -28,8 +27,8 @@ function getMergeIndicators(grid: Grid, row: number, col: number): MergeIndicato
   const result: MergeIndicators = { left: [], right: [], top: [], bottom: [] };
   if (value === 0) return result;
 
-  const addUnique = (arr: MergeIndicator[], ci: number, blocked: boolean) => {
-    if (!arr.some(i => i.colorIndex === ci)) arr.push({ colorIndex: ci, blocked });
+  const addUnique = (arr: MergeIndicator[], val: number, blocked: boolean) => {
+    if (!arr.some(i => i.tileValue === val)) arr.push({ tileValue: val, blocked });
   };
 
   // Scan left (from col-1 toward 0)
@@ -37,7 +36,7 @@ function getMergeIndicators(grid: Grid, row: number, col: number): MergeIndicato
   for (let c = col - 1; c >= 0; c--) {
     const other = grid[row][c];
     if (other !== 0) {
-      if (canMerge(value, other)) addUnique(result.left, tileColorIndex(other), blocked);
+      if (canMerge(value, other)) addUnique(result.left, other, blocked);
       blocked = true;
     }
   }
@@ -46,7 +45,7 @@ function getMergeIndicators(grid: Grid, row: number, col: number): MergeIndicato
   for (let c = col + 1; c < SIZES.gridSize; c++) {
     const other = grid[row][c];
     if (other !== 0) {
-      if (canMerge(value, other)) addUnique(result.right, tileColorIndex(other), blocked);
+      if (canMerge(value, other)) addUnique(result.right, other, blocked);
       blocked = true;
     }
   }
@@ -55,7 +54,7 @@ function getMergeIndicators(grid: Grid, row: number, col: number): MergeIndicato
   for (let r = row - 1; r >= 0; r--) {
     const other = grid[r][col];
     if (other !== 0) {
-      if (canMerge(value, other)) addUnique(result.top, tileColorIndex(other), blocked);
+      if (canMerge(value, other)) addUnique(result.top, other, blocked);
       blocked = true;
     }
   }
@@ -64,7 +63,7 @@ function getMergeIndicators(grid: Grid, row: number, col: number): MergeIndicato
   for (let r = row + 1; r < SIZES.gridSize; r++) {
     const other = grid[r][col];
     if (other !== 0) {
-      if (canMerge(value, other)) addUnique(result.bottom, tileColorIndex(other), blocked);
+      if (canMerge(value, other)) addUnique(result.bottom, other, blocked);
       blocked = true;
     }
   }
@@ -116,7 +115,6 @@ export function Board({ grid, moveEvents, scale, shakeCounter, colorBlindMode = 
   });
 
   // ── Spawn animations ───────────────────────────────────
-  // Track which cells just spawned so we can animate them
   const spawnKeys = new Set<string>();
   for (const ev of moveEvents) {
     if (ev.type === 'spawn') {
@@ -134,7 +132,6 @@ export function Board({ grid, moveEvents, scale, shakeCounter, colorBlindMode = 
           transform: [{ translateX: shakeTranslate }],
         },
       ]}
-      accessibilityRole="grid"
       accessibilityLabel="Game board"
     >
       {/* Empty cell slots */}
@@ -210,10 +207,10 @@ function AnimatedTile({
   tileWidth, tileHeight, gapX, gapY, borderRadius,
   scale, animateSpawn, indicators, colorBlindMode,
 }: AnimatedTileProps) {
-  const { fill, text } = tileColors(value);
-  const fontSize = value >= 100
-    ? SIZES.tileFontSizeLarge * scale
-    : SIZES.tileFontSize * scale;
+  const fill = tileHex(value);
+  const text = tileTextColor(value);
+  const label = tileLabel(value);
+  const fontSize = SIZES.tileFontSize * scale;
 
   const x = col * (tileWidth + gapX);
   const y = row * (tileHeight + gapY);
@@ -242,12 +239,11 @@ function AnimatedTile({
   const lineL = 8 * scale;
   const lineGap = 2 * scale;
 
-  // Renders a solid indicator line, with 50% opacity if blocked
   const renderLine = (ind: MergeIndicator, isVertical: boolean) => {
-    const color = tileHex(encodeTile(ind.colorIndex, 0));
+    const color = tileHex(ind.tileValue);
     return (
       <View
-        key={ind.colorIndex}
+        key={ind.tileValue}
         style={isVertical
           ? { width: lineW, height: lineL, marginVertical: lineGap / 2, backgroundColor: color, opacity: ind.blocked ? 0.5 : 1 }
           : { width: lineL, height: lineW, marginHorizontal: lineGap / 2, backgroundColor: color, opacity: ind.blocked ? 0.5 : 1 }
@@ -274,17 +270,19 @@ function AnimatedTile({
         transform: [{ scale: animatedScale }],
       }}
       accessible
-      accessibilityLabel={`Tile ${value} at row ${row + 1} column ${col + 1}`}
+      accessibilityLabel={`Tile ${label ?? value} at row ${row + 1} column ${col + 1}`}
     >
-      <Animated.Text
-        style={{
-          color: text,
-          fontSize,
-          fontWeight: 'bold',
-        }}
-      >
-        {value}
-      </Animated.Text>
+      {colorBlindMode && label && (
+        <Animated.Text
+          style={{
+            color: text,
+            fontSize,
+            fontWeight: 'bold',
+          }}
+        >
+          {label}
+        </Animated.Text>
+      )}
 
       {/* Merge direction indicators */}
       {indicators.left.length > 0 && (

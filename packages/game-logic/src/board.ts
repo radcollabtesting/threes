@@ -1,5 +1,5 @@
 import type { Grid, Position } from './types';
-import { CYAN, MAGENTA, YELLOW, tileLabel, tileHex } from './color';
+import { R1, tileLabel, tileHex } from './color';
 
 /** Creates a gridSize x gridSize grid filled with 0 (empty) */
 export function createEmptyGrid(gridSize: number): Grid {
@@ -29,23 +29,19 @@ export function isGridFull(grid: Grid): boolean {
   return getEmptyCells(grid).length === 0;
 }
 
-const C = CYAN;
-const M = MAGENTA;
-const Y = YELLOW;
-
 /**
- * Fixture board for the color mixing game.
- *   Row 0: [C, M, _, Y]
- *   Row 1: [C, _, _, Y]
- *   Row 2: [_, _, _, _]
- *   Row 3: [_, _, _, _]
+ * Fixture board for the simplified shade game.
+ *   Row 0: [R1, R1, _,  R1]
+ *   Row 1: [R1, _,  _,  R1]
+ *   Row 2: [_,  _,  _,  _]
+ *   Row 3: [_,  _,  _,  _]
  *
- * Swipe up merges C+C (col 0) and Y+Y (col 3) into random primaries.
+ * Swipe up merges R1+R1 (col 0) and R1+R1 (col 3) into R2.
  */
 export function getFixtureGrid(): Grid {
   return [
-    [C, M, 0, Y],
-    [C, 0, 0, Y],
+    [R1, R1, 0, R1],
+    [R1, 0, 0, R1],
     [0, 0, 0, 0],
     [0, 0, 0, 0],
   ];
@@ -59,7 +55,7 @@ export function gridToString(grid: Grid): string {
         .map(v => {
           if (v === 0) return '  .  ';
           const label = tileLabel(v);
-          if (label) return `  ${label}  `;
+          if (label) return ` ${label.padStart(3)} `;
           return tileHex(v).slice(0, 5);
         })
         .join(' '),
