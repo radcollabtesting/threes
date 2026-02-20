@@ -26,15 +26,17 @@ export {
 } from './catalyst-mix';
 
 export {
-  R1, R2, R3,
-  G1, G2, G3,
-  B1, B2, B3,
+  R1, R2, R3, R4, R5,
+  G1, G2, G3, G4, G5,
+  B1, B2, B3, B4, B5,
   MAX_TILE,
   BASE_TILE,
   BASE_TILES,
+  SHADES_PER_COLOR,
+  NUM_COLORS,
   tileColorFamily,
   tileShade,
-  isColorTransition,
+  isMaxShade,
   tileTier,
   tileHex,
   tileTextColor,

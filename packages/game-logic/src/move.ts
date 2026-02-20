@@ -1,7 +1,6 @@
 import type { Direction, Grid, MoveResult, MoveEvent, Position } from './types';
 import { cloneGrid } from './board';
 import { canMerge, mergeResult } from './merge';
-import { isColorTransition } from './color';
 
 /**
  * Applies a one-step move in the given direction.
@@ -18,11 +17,6 @@ import { isColorTransition } from './color';
  * so that a vacated cell is immediately available for the tile behind it.
  * Example for LEFT: process columns 1 → 2 → 3 (each row independently).
  *
- * COLOR-TRANSITION POP:
- * When a merge crosses a color boundary (R3+R3→G1 or G3+G3→B1), tiles
- * in the 4 cardinal directions around the merge point are pushed one cell
- * outward (if the destination is empty and in bounds).
- *
  * changedLines contains row indices for horizontal moves, column indices for vertical.
  */
 export function applyMove(grid: Grid, direction: Direction): MoveResult {
@@ -38,9 +32,6 @@ export function applyMove(grid: Grid, direction: Direction): MoveResult {
   let changed = false;
   const changedLines = new Set<number>();
   const events: MoveEvent[] = [];
-
-  // Track color-transition merges for pop phase
-  const colorTransitionMerges: Position[] = [];
 
   // Movement delta
   const [dr, dc] = directionDelta(direction);
@@ -90,52 +81,8 @@ export function applyMove(grid: Grid, direction: Direction): MoveResult {
           value: result,
           mergedFrom: [value, destValue],
         });
-
-        // Check for color-transition merge (R3+R3→G1 or G3+G3→B1)
-        if (isColorTransition(value)) {
-          colorTransitionMerges.push({ row: destRow, col: destCol });
-        }
       }
       // else: blocked — tile stays
-    }
-  }
-
-  // ── Color-transition pop phase ─────────────────────────
-  // Push tiles adjacent to color-transition merge points outward.
-  for (const mergePos of colorTransitionMerges) {
-    const pushDirs: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-    for (const [pdr, pdc] of pushDirs) {
-      const adjRow = mergePos.row + pdr;
-      const adjCol = mergePos.col + pdc;
-
-      // Skip if adjacent cell is out of bounds or empty
-      if (adjRow < 0 || adjRow >= size || adjCol < 0 || adjCol >= size) continue;
-      const adjVal = newGrid[adjRow][adjCol];
-      if (adjVal === 0) continue;
-
-      // Skip the merge result tile itself (it's at mergePos, not adj)
-      // Skip tiles that were just merged (don't push them)
-      if (merged[adjRow][adjCol]) continue;
-
-      // Destination: one more step outward
-      const pushRow = adjRow + pdr;
-      const pushCol = adjCol + pdc;
-
-      // Skip if push destination is out of bounds or occupied
-      if (pushRow < 0 || pushRow >= size || pushCol < 0 || pushCol >= size) continue;
-      if (newGrid[pushRow][pushCol] !== 0) continue;
-
-      // Push the tile outward
-      newGrid[pushRow][pushCol] = adjVal;
-      newGrid[adjRow][adjCol] = 0;
-      changed = true;
-      changedLines.add(isHorizontal ? adjRow : adjCol);
-      events.push({
-        type: 'move',
-        from: { row: adjRow, col: adjCol },
-        to: { row: pushRow, col: pushCol },
-        value: adjVal,
-      });
     }
   }
 

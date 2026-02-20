@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import { ThreesGame } from '../game';
 import { createRng } from '@threes/rng';
-import { R1 } from '../color';
+import { BASE_TILES } from '../color';
 
 describe('deterministic RNG', () => {
   test('createRng produces identical sequence for same seed', () => {
@@ -45,26 +45,12 @@ describe('deterministic RNG', () => {
     expect(states1).toEqual(states2);
   });
 
-  test('nextTile is always R1 and deterministic across replays', () => {
+  test('nextTile is always one of BASE_TILES and deterministic across replays', () => {
     const game1 = new ThreesGame({ seed: 123 });
     const game2 = new ThreesGame({ seed: 123 });
 
-    expect(game1.nextTile).toBe(R1);
-    expect(game2.nextTile).toBe(R1);
-
-    const dirs = ['up', 'left', 'down', 'right', 'up'] as const;
-    for (const dir of dirs) {
-      game1.move(dir);
-      game2.move(dir);
-      expect(game1.nextTile).toBe(game2.nextTile);
-      expect(game1.nextTile).toBe(R1);
-    }
-  });
-
-  test('bag strategy is deterministic (always R1)', () => {
-    const game1 = new ThreesGame({ seed: 123, nextTileStrategy: 'bag' });
-    const game2 = new ThreesGame({ seed: 123, nextTileStrategy: 'bag' });
-
+    expect(BASE_TILES).toContain(game1.nextTile);
+    expect(BASE_TILES).toContain(game2.nextTile);
     expect(game1.nextTile).toBe(game2.nextTile);
 
     const dirs = ['up', 'left', 'down', 'right', 'up'] as const;
@@ -72,6 +58,23 @@ describe('deterministic RNG', () => {
       game1.move(dir);
       game2.move(dir);
       expect(game1.nextTile).toBe(game2.nextTile);
+      expect(BASE_TILES).toContain(game1.nextTile);
+    }
+  });
+
+  test('bag strategy is deterministic', () => {
+    const game1 = new ThreesGame({ seed: 123, nextTileStrategy: 'bag' });
+    const game2 = new ThreesGame({ seed: 123, nextTileStrategy: 'bag' });
+
+    expect(game1.nextTile).toBe(game2.nextTile);
+    expect(BASE_TILES).toContain(game1.nextTile);
+
+    const dirs = ['up', 'left', 'down', 'right', 'up'] as const;
+    for (const dir of dirs) {
+      game1.move(dir);
+      game2.move(dir);
+      expect(game1.nextTile).toBe(game2.nextTile);
+      expect(BASE_TILES).toContain(game1.nextTile);
     }
   });
 });

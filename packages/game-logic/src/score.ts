@@ -4,10 +4,12 @@ import { tileTier } from './color';
 /**
  * Computes the score for a single tile.
  *
- * Each level is 3× the previous:
- *   R1 = 3^1  =     3      G1 = 3^4 =    81      B1 = 3^7 =  2187
- *   R2 = 3^2  =     9      G2 = 3^5 =   243      B2 = 3^8 =  6561
- *   R3 = 3^3  =    27      G3 = 3^6 =   729      B3 = 3^9 = 19683
+ * Each shade level is 3× the previous (same scoring for all colors):
+ *   Shade 1 = 3^1 =   3     (R1, G1, B1)
+ *   Shade 2 = 3^2 =   9     (R2, G2, B2)
+ *   Shade 3 = 3^3 =  27     (R3, G3, B3)
+ *   Shade 4 = 3^4 =  81     (R4, G4, B4)
+ *   Shade 5 = 3^5 = 243     (R5, G5, B5)
  */
 export function scoreTile(value: CellValue): number {
   const tier = tileTier(value);

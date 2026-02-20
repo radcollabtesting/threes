@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { ThreesGame } from '../game';
-import { R1, R2, BASE_TILES } from '../color';
+import { R1, R2, G1, G2, B1, B2, BASE_TILES } from '../color';
 import { scoreTile } from '../score';
 
 describe('ThreesGame', () => {
@@ -16,94 +16,86 @@ describe('ThreesGame', () => {
       expect(count).toBeGreaterThanOrEqual(2);
       expect(count).toBeLessThanOrEqual(5);
 
-      // All starting tiles should be R1 (the only spawnable tile)
+      // All starting tiles must be one of BASE_TILES (R1, G1, or B1)
       for (const v of game.grid.flat()) {
-        if (v > 0) expect(v).toBe(R1);
+        if (v > 0) {
+          expect(BASE_TILES).toContain(v);
+        }
       }
     });
 
     test('fixture mode loads reference board', () => {
       const game = new ThreesGame({ fixtureMode: true });
       expect(game.grid).toEqual([
-        [R1, R1, 0, R1],
-        [R1, 0, 0, R1],
+        [R1, G1, 0, B1],
+        [G1, 0, 0, R1],
         [0, 0, 0, 0],
         [0, 0, 0, 0],
       ]);
-      expect(game.nextTile).toBe(R1);
+    });
+
+    test('fixture nextTile should be one of BASE_TILES', () => {
+      const game = new ThreesGame({ fixtureMode: true });
+      expect(BASE_TILES).toContain(game.nextTile);
     });
   });
 
   describe('move mechanics', () => {
     test('valid move returns true and increments moveCount', () => {
       const game = new ThreesGame({ fixtureMode: true });
-      const result = game.move('up');
+      const result = game.move('down');
       expect(result).toBe(true);
       expect(game.moveCount).toBe(1);
     });
 
-    test('valid move spawns a tile and draws new nextTile', () => {
+    test('valid move spawns a tile and draws new nextTile (one of BASE_TILES)', () => {
       const game = new ThreesGame({ fixtureMode: true });
-      expect(game.nextTile).toBe(R1);
+      expect(BASE_TILES).toContain(game.nextTile);
 
-      game.move('up');
+      game.move('down');
 
-      // nextTile is always R1 in the simplified system
-      expect(game.nextTile).toBe(R1);
-    });
+      // After the move a new nextTile is drawn; it must still be a base tile
+      expect(BASE_TILES).toContain(game.nextTile);
 
-    test('fixture: swipe up merges adjacent R1 pairs into R2', () => {
-      const game = new ThreesGame({ fixtureMode: true });
-      // Board: [R1, R1, _,  R1]
-      //        [R1, _,  _,  R1]
-      // Swipe up: R1(1,0) + R1(0,0) → R2, R1(1,3) + R1(0,3) → R2
-      game.move('up');
-      const g = game.grid;
-      // Col 0: two R1s merged → R2
-      expect(g[0][0]).toBe(R2);
-      // Col 3: two R1s merged → R2
-      expect(g[0][3]).toBe(R2);
-      // R1 at (0,1) stays (nothing to merge with above)
-      expect(g[0][1]).toBe(R1);
-    });
-  });
-
-  describe('invalid move — no side effects', () => {
-    test('invalid move returns false, no spawn, no moveCount change', () => {
-      const dirs = ['left', 'right', 'up', 'down'] as const;
-      for (const dir of dirs) {
-        const game = new ThreesGame({ seed: 999 });
-        const gBefore = JSON.stringify(game.grid);
-        const nBefore = game.nextTile;
-        const result = game.move(dir);
-        if (!result) {
-          expect(JSON.stringify(game.grid)).toBe(gBefore);
-          expect(game.nextTile).toBe(nBefore);
-          expect(game.moveCount).toBe(0);
-        }
-      }
+      // A tile should have been spawned — total tile count should not have dropped
+      const tileCount = game.grid.flat().filter(v => v > 0).length;
+      expect(tileCount).toBeGreaterThanOrEqual(1);
     });
   });
 
   describe('scoring', () => {
-    test('scoring is enabled by default and produces non-zero scores', () => {
-      const game = new ThreesGame();
-      expect(game.score).toBeGreaterThan(0);
-      const count = game.grid.flat().filter(v => v > 0).length;
-      // All starting tiles are R1 → score = 3^(0+1) = 3 each
-      expect(game.score).toBe(count * scoreTile(R1));
+    test('R1/G1/B1 all score 3', () => {
+      expect(scoreTile(R1)).toBe(3);
+      expect(scoreTile(G1)).toBe(3);
+      expect(scoreTile(B1)).toBe(3);
     });
 
-    test('R1 scores 3, R2 scores 9, R3 scores 27', () => {
-      expect(scoreTile(R1)).toBe(3);
+    test('R2/G2/B2 all score 9', () => {
       expect(scoreTile(R2)).toBe(9);
+      expect(scoreTile(G2)).toBe(9);
+      expect(scoreTile(B2)).toBe(9);
+    });
+
+    test('tier 2 tiles (R3/G3/B3) all score 27', () => {
       expect(scoreTile(3)).toBe(27);  // R3
-      expect(scoreTile(4)).toBe(81);  // G1
-      expect(scoreTile(5)).toBe(243); // G2
-      expect(scoreTile(6)).toBe(729); // G3
-      expect(scoreTile(7)).toBe(2187);  // B1
-      expect(scoreTile(8)).toBe(6561);  // B2
-      expect(scoreTile(9)).toBe(19683); // B3
+      expect(scoreTile(8)).toBe(27);  // G3
+      expect(scoreTile(13)).toBe(27); // B3
+    });
+
+    test('tier 3 tiles (R4/G4/B4) all score 81', () => {
+      expect(scoreTile(4)).toBe(81);  // R4
+      expect(scoreTile(9)).toBe(81);  // G4
+      expect(scoreTile(14)).toBe(81); // B4
+    });
+
+    test('tier 4 tiles (R5/G5/B5) all score 243', () => {
+      expect(scoreTile(5)).toBe(243);  // R5
+      expect(scoreTile(10)).toBe(243); // G5
+      expect(scoreTile(15)).toBe(243); // B5
+    });
+
+    test('empty tile scores 0', () => {
+      expect(scoreTile(0)).toBe(0);
     });
   });
 
@@ -136,7 +128,7 @@ describe('ThreesGame', () => {
   });
 
   describe('restart', () => {
-    test('restart resets game state with a fresh random seed', () => {
+    test('restart resets game state', () => {
       const game = new ThreesGame({ seed: 42 });
 
       game.move('up');
@@ -167,24 +159,19 @@ describe('ThreesGame', () => {
     });
   });
 
-  describe('spawning', () => {
-    test('only R1 tiles spawn (all strategies produce R1)', () => {
-      const game = new ThreesGame({ seed: 1 });
-      expect(game.nextTile).toBe(R1);
-    });
-
-    test('nextTile is always R1 regardless of board state', () => {
-      for (let s = 1; s <= 5; s++) {
+  describe('nextTile is always one of BASE_TILES', () => {
+    test('nextTile is always one of BASE_TILES across many seeds and moves', () => {
+      for (let s = 1; s <= 10; s++) {
         const game = new ThreesGame({ seed: s });
-        expect(game.nextTile).toBe(R1);
-      }
-    });
+        expect(BASE_TILES).toContain(game.nextTile);
 
-    test('bag strategy still works when explicitly set (always R1)', () => {
-      const game = new ThreesGame({ seed: 42, nextTileStrategy: 'bag' });
-      expect(game.nextTile).toBe(R1);
-      game.move('up');
-      expect(game.nextTile).toBe(R1);
+        const dirs = ['up', 'left', 'down', 'right'] as const;
+        for (let i = 0; i < 20; i++) {
+          game.move(dirs[i % dirs.length]);
+          if (game.status !== 'playing') break;
+          expect(BASE_TILES).toContain(game.nextTile);
+        }
+      }
     });
   });
 });

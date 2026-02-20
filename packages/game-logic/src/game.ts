@@ -19,16 +19,14 @@ import { selectSpawnPosition } from './spawn';
 import { createNextTileGenerator } from './next-tile';
 import { scoreGrid } from './score';
 import { createRng, pickRandom, randomInt } from '@threes/rng';
-import { BASE_TILES, R1 } from './color';
+import { BASE_TILES } from './color';
 
 /**
  * Core game engine for the shade-based tile game.
  *
- * Manages grid state, move validation, tile spawning, next-tile preview,
- * game-over detection, and scoring.
- *
- * All randomness flows through a seeded PRNG so that the same seed + moves
- * always produce the same game history.
+ * Three independent color families (Red, Green, Blue) each with 5 shades.
+ * All 3 base tiles (R1, G1, B1) spawn from the start, making the board
+ * more contested and the game more challenging.
  */
 export class ThreesGame {
   readonly config: GameConfig;
@@ -113,7 +111,7 @@ export class ThreesGame {
    *
    * Turn flow:
    *   1. Validate: if move changes nothing -> return false (no spawn, no turn).
-   *   2. Apply movement + merges (including color-transition pop).
+   *   2. Apply movement + merges.
    *   3. Spawn a new tile (value = current nextTile) on the opposite edge.
    *   4. Draw a new nextTile value for the future.
    *   5. Update score.
@@ -126,7 +124,7 @@ export class ThreesGame {
 
     this._lastMoveEvents = [];
 
-    // 1-2. Apply movement + merges + color-transition pop
+    // 1-2. Apply movement + merges
     const { newGrid, changed, changedLines, events } = applyMove(
       this._grid,
       direction,
@@ -201,7 +199,7 @@ export class ThreesGame {
   private _initializeBoard(): void {
     if (this.config.fixtureMode) {
       this._grid = getFixtureGrid();
-      this._nextTile = R1;
+      this._nextTile = this._nextTileGen(this._grid);
     } else {
       this._placeRandomStartTiles();
       this._nextTile = this._nextTileGen(this._grid);
@@ -214,8 +212,7 @@ export class ThreesGame {
 
   /**
    * Places random starting tiles on the empty board.
-   * If startTilesCount is 0, picks a random count between 3 and 5.
-   * All starting tiles are R1 (the base shade).
+   * Tiles are randomly chosen from the 3 base tiles (R1, G1, B1).
    */
   private _placeRandomStartTiles(): void {
     const count = this.config.startTilesCount > 0
@@ -232,7 +229,7 @@ export class ThreesGame {
       if (empty.length === 0) break;
 
       const pos = pickRandom(empty, this._rng);
-      this._grid[pos.row][pos.col] = R1;
+      this._grid[pos.row][pos.col] = pickRandom(BASE_TILES, this._rng);
     }
   }
 }

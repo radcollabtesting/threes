@@ -2,7 +2,7 @@ import { describe, test, expect } from 'vitest';
 import { selectSpawnPosition, getSpawnEdgeCells } from '../spawn';
 import { resolveConfig } from '../config';
 import { createRng } from '@threes/rng';
-import { R1, R2, R3 } from '../color';
+import { R1, R2, R3, G1, B1 } from '../color';
 import type { Grid } from '../types';
 
 describe('getSpawnEdgeCells', () => {
@@ -66,10 +66,10 @@ describe('selectSpawnPosition', () => {
 
   test('returns null when board is completely full', () => {
     const grid: Grid = [
-      [R1, R2, R3, R1],
-      [R3, R1, R2, R3],
-      [R2, R3, R1, R2],
-      [R1, R2, R3, R1],
+      [R1, R2, R3, G1],
+      [R3, G1, R2, R3],
+      [R2, R3, G1, R2],
+      [G1, R2, B1, R1],
     ];
     const changedLines = new Set([0]);
     const rng = createRng(42);

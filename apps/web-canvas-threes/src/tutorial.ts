@@ -2,10 +2,10 @@
  * Tutorial mode for the shade-based tile game.
  *
  * Guides the player through core mechanics in 4 stages:
- *   1. "Swipe anywhere to move the board"         — 2 R1 tiles, no spawns
+ *   1. "Swipe anywhere to move the board"         — mixed color tiles, no spawns
  *   2. "Walls help you merge (keep swiping)"       — border shown
- *   3. "Merge matching shades to level up!"        — R2 created, spawn begins
- *   4. "Keep merging for new colors!"              — continue button
+ *   3. "Merge matching shades to level up!"        — merge occurs, spawn begins
+ *   4. "Keep merging to reach new shades!"          — continue button
  */
 
 import {
@@ -14,7 +14,8 @@ import {
   selectSpawnPosition,
   resolveConfig,
   R1,
-  BASE_TILE,
+  G1,
+  BASE_TILES,
   type Grid,
   type Direction,
   type CellValue,
@@ -34,7 +35,7 @@ const HEADERS: Record<TutorialStage, string> = {
   swipe: 'Swipe anywhere to move the board',
   wall: 'Walls help you merge (keep swiping)',
   merge: 'Merge matching shades to level up!',
-  continue: 'Keep merging for new colors!',
+  continue: 'Keep merging to reach new shades!',
 };
 
 /* ── State ────────────────────────────────────────────── */
@@ -49,6 +50,7 @@ export interface TutorialState {
 
 export function createTutorialState(): TutorialState {
   const grid = createEmptyGrid(4);
+  // Place two R1 tiles so the player can discover merging
   grid[2][2] = R1;
   grid[3][3] = R1;
 
@@ -114,6 +116,10 @@ const SPAWN_CONFIG: GameConfig = resolveConfig({
   spawnOnlyOnChangedLine: true,
 });
 
+function randomBaseTile(): CellValue {
+  return BASE_TILES[Math.floor(rng() * BASE_TILES.length)];
+}
+
 function doSpawn(
   state: TutorialState,
   direction: Direction,
@@ -134,7 +140,7 @@ function doSpawn(
       value: state.nextTile,
     });
   }
-  state.nextTile = BASE_TILE;
+  state.nextTile = randomBaseTile();
 }
 
 /* ── Main move handler ────────────────────────────────── */
@@ -164,7 +170,7 @@ export function tutorialMove(
     case 'wall':
       if (mergeEvents.length > 0) {
         state.stage = 'merge';
-        state.nextTile = BASE_TILE;
+        state.nextTile = randomBaseTile();
         doSpawn(state, direction, changedLines);
       }
       break;

@@ -1,5 +1,5 @@
 import type { Grid, Position } from './types';
-import { R1, tileLabel, tileHex } from './color';
+import { R1, G1, B1, tileLabel, tileHex } from './color';
 
 /** Creates a gridSize x gridSize grid filled with 0 (empty) */
 export function createEmptyGrid(gridSize: number): Grid {
@@ -30,18 +30,18 @@ export function isGridFull(grid: Grid): boolean {
 }
 
 /**
- * Fixture board for the simplified shade game.
- *   Row 0: [R1, R1, _,  R1]
- *   Row 1: [R1, _,  _,  R1]
+ * Fixture board for the 3-color shade game.
+ *   Row 0: [R1, G1, _,  B1]
+ *   Row 1: [G1, _,  _,  R1]
  *   Row 2: [_,  _,  _,  _]
  *   Row 3: [_,  _,  _,  _]
  *
- * Swipe up merges R1+R1 (col 0) and R1+R1 (col 3) into R2.
+ * All 3 colors present from the start.
  */
 export function getFixtureGrid(): Grid {
   return [
-    [R1, R1, 0, R1],
-    [R1, 0, 0, R1],
+    [R1, G1, 0, B1],
+    [G1, 0, 0, R1],
     [0, 0, 0, 0],
     [0, 0, 0, 0],
   ];
