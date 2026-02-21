@@ -39,6 +39,8 @@ export interface GameConfig {
   fixtureMode: boolean;
   /** Enable non-color cue (corner dot) for 1 vs 2 tiles (accessibility flag) */
   accessibilityDotEnabled: boolean;
+  /** Number of tiles to spawn from queue per move (default 2) */
+  queueSpawnCount: number;
 }
 
 /* ── Move results ──────────────────────────────────────── */
@@ -56,6 +58,10 @@ export interface MoveResult {
   changedLines: Set<number>;
   /** Animation events produced by this move */
   events: MoveEvent[];
+  /** Tiles produced by splits during this move (to be added to queue) */
+  splitOutputs: CellValue[];
+  /** Total score earned from splits this move */
+  splitScore: number;
 }
 
 /** Row/column position on the grid */
@@ -67,10 +73,13 @@ export interface Position {
 /** Serializable game-state snapshot */
 export interface GameState {
   grid: Grid;
-  nextTile: CellValue;
+  /** Queue of tiles waiting to spawn */
+  queue: CellValue[];
   status: GameStatus;
   score: number;
   moveCount: number;
+  /** @deprecated Use queue instead */
+  nextTile: CellValue;
 }
 
 /** Events emitted during a move (used by renderers for animation) */
@@ -84,4 +93,6 @@ export interface MoveEvent {
   value: CellValue;
   /** For merges: the two input values that combined */
   mergedFrom?: [CellValue, CellValue];
+  /** Whether this merge was a milestone split (3 outputs) */
+  isMilestone?: boolean;
 }

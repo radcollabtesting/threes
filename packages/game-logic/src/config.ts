@@ -2,18 +2,17 @@ import type { GameConfig } from './types';
 
 /**
  * Default game configuration.
- * Every value is a clearly labelled default; override any field by
- * passing a partial config to ThreesGame constructor.
  */
 export const DEFAULT_CONFIG: GameConfig = {
   gridSize: 4,
-  startTilesCount: 0, // 0 = random 3–5 (handled by game.ts)
+  startTilesCount: 0, // 0 = random 4–6 Black tiles
   spawnOnlyOnChangedLine: true,
-  nextTileStrategy: 'progressive', // unlocks higher tiers as board progresses
-  scoringEnabled: true, // color game always scores
+  nextTileStrategy: 'progressive',
+  scoringEnabled: true,
   seed: 42,
   fixtureMode: false,
   accessibilityDotEnabled: false,
+  queueSpawnCount: 2, // spawn up to 2 tiles per move from queue
 };
 
 /** Merges user overrides onto the defaults */

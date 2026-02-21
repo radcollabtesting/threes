@@ -1,51 +1,53 @@
 import { applyMove, isValidMove, hasAnyValidMove } from '../move';
 import {
-  CYAN, MAGENTA, YELLOW, encodeTile, tileColorIndex, tileTier,
-  BLUE_IDX, RED_IDX, GREEN_IDX,
+  BLACK, CYAN, MAGENTA, WHITE, LIGHT_GRAY,
+  tileColorIndex,
+  LIGHT_GRAY_IDX, CYAN_IDX, MAGENTA_IDX, YELLOW_IDX,
 } from '../color';
 import type { Grid } from '../types';
 
+const BK = BLACK;
 const C = CYAN;
 const M = MAGENTA;
-const Y = YELLOW;
+const W = WHITE;
 
 describe('applyMove — one-step movement', () => {
   test('tile moves exactly one cell left into empty space', () => {
     const grid: Grid = [
-      [0, 0, C, 0],
+      [0, 0, BK, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
     ];
     const { newGrid } = applyMove(grid, 'left');
-    expect(newGrid[0]).toEqual([0, C, 0, 0]);
+    expect(newGrid[0]).toEqual([0, BK, 0, 0]);
   });
 
   test('tile does NOT slide multiple cells in one move', () => {
     const grid: Grid = [
-      [0, 0, 0, C],
+      [0, 0, 0, BK],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
     ];
     const { newGrid } = applyMove(grid, 'left');
-    expect(newGrid[0]).toEqual([0, 0, C, 0]);
+    expect(newGrid[0]).toEqual([0, 0, BK, 0]);
   });
 
   test('tile moves one cell right', () => {
     const grid: Grid = [
-      [C, 0, 0, 0],
+      [BK, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
     ];
     const { newGrid } = applyMove(grid, 'right');
-    expect(newGrid[0]).toEqual([0, C, 0, 0]);
+    expect(newGrid[0]).toEqual([0, BK, 0, 0]);
   });
 
   test('tile at leading edge stays put', () => {
     const grid: Grid = [
-      [C, 0, 0, 0],
+      [BK, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
@@ -55,25 +57,28 @@ describe('applyMove — one-step movement', () => {
   });
 });
 
-describe('applyMove — merge during movement (same-color)', () => {
-  test('C + C merge when moving left → primary', () => {
+describe('applyMove — split during movement', () => {
+  test('BK + BK merge when moving left → merge point empties (regular split)', () => {
     const grid: Grid = [
-      [C, C, 0, 0],
+      [BK, BK, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
     ];
-    const { newGrid, changed } = applyMove(grid, 'left');
+    const { newGrid, changed, splitOutputs } = applyMove(grid, 'left');
     expect(changed).toBe(true);
-    const result = newGrid[0][0];
-    expect(tileTier(result)).toBe(1);
-    expect([BLUE_IDX, RED_IDX, GREEN_IDX]).toContain(tileColorIndex(result));
+    // Regular split: merge point empties
+    expect(newGrid[0][0]).toBe(0);
     expect(newGrid[0][1]).toBe(0);
+    // Outputs go to queue
+    expect(splitOutputs).toHaveLength(2);
+    expect(tileColorIndex(splitOutputs[0])).toBe(LIGHT_GRAY_IDX);
+    expect(tileColorIndex(splitOutputs[1])).toBe(LIGHT_GRAY_IDX);
   });
 
-  test('different colors do NOT merge: C + M', () => {
+  test('different colors do NOT merge: BK + C', () => {
     const grid: Grid = [
-      [M, C, 0, 0],
+      [C, BK, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
@@ -84,42 +89,60 @@ describe('applyMove — merge during movement (same-color)', () => {
 
   test('merged tile cannot merge again in the same turn', () => {
     const grid: Grid = [
-      [C, C, C, 0],
+      [BK, BK, BK, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
     ];
-    const { newGrid } = applyMove(grid, 'left');
-    // First two Cs merge at col 0, third C slides to col 1 (can't merge with result)
-    expect(tileTier(newGrid[0][0])).toBe(1); // merged → primary
-    expect(newGrid[0][1]).toBe(C); // third C slid but couldn't merge
-    expect(newGrid[0][2]).toBe(0);
+    const { newGrid, splitOutputs } = applyMove(grid, 'left');
+    // First two BKs merge at col 0 (regular split → empties), third BK slides to col 1
+    // But col 0 is empty now, so third BK slides into col 1, which is also empty
+    // Only one split happens (the merged flag prevents another)
+    expect(splitOutputs).toHaveLength(2);
+    // Third BK should still be on the board
+    const nonEmpty = newGrid[0].filter(v => v > 0);
+    expect(nonEmpty).toHaveLength(1);
+    expect(nonEmpty[0]).toBe(BK);
   });
 
-  test('different colors block merge — tiles just slide', () => {
-    const R = encodeTile(RED_IDX, 0);
-    const G = encodeTile(GREEN_IDX, 0);
-    // R + G are different colors, can't merge
+  test('milestone split: Light Gray + Light Gray → first output on merge point', () => {
+    const LG = LIGHT_GRAY;
     const grid: Grid = [
-      [G, R, 0, 0],
+      [LG, LG, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
     ];
-    const { newGrid, changed } = applyMove(grid, 'left');
-    // G is at leading edge (col 0), R can't merge with G, so nothing moves
-    expect(changed).toBe(false);
-    expect(newGrid[0][0]).toBe(G);
-    expect(newGrid[0][1]).toBe(R);
+    const { newGrid, splitOutputs, events } = applyMove(grid, 'left');
+    // Milestone: first output stays on merge point
+    expect(newGrid[0][0]).toBeGreaterThan(0);
+    const mergePointCI = tileColorIndex(newGrid[0][0]);
+    expect([CYAN_IDX, MAGENTA_IDX, YELLOW_IDX]).toContain(mergePointCI);
+    // Other 2 go to queue
+    expect(splitOutputs).toHaveLength(2);
+    // Merge event should have isMilestone
+    const mergeEvent = events.find(e => e.type === 'merge');
+    expect(mergeEvent?.isMilestone).toBe(true);
+  });
+
+  test('splitScore is accumulated from splits', () => {
+    const grid: Grid = [
+      [BK, BK, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ];
+    const { splitScore } = applyMove(grid, 'left');
+    expect(splitScore).toBe(3); // Black splits score 3
   });
 });
 
 describe('applyMove — changedLines', () => {
   test('horizontal move tracks changed rows', () => {
     const grid: Grid = [
-      [0, C, 0, 0],
+      [0, BK, 0, 0],
       [0, 0, 0, 0],
-      [0, M, 0, 0],
+      [0, C, 0, 0],
       [0, 0, 0, 0],
     ];
     const { changedLines } = applyMove(grid, 'left');
@@ -130,7 +153,7 @@ describe('applyMove — changedLines', () => {
 describe('isValidMove', () => {
   test('returns false when nothing can move or merge', () => {
     const grid: Grid = [
-      [C, 0, 0, 0],
+      [BK, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
@@ -141,7 +164,7 @@ describe('isValidMove', () => {
 
   test('returns true when a tile can slide', () => {
     const grid: Grid = [
-      [0, C, 0, 0],
+      [0, BK, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
@@ -152,33 +175,31 @@ describe('isValidMove', () => {
 
 describe('hasAnyValidMove', () => {
   test('false for a full board with no same-color neighbors', () => {
-    // Alternating C, M so no two adjacent tiles are the same color
     const grid: Grid = [
-      [C, M, C, M],
-      [M, C, M, C],
-      [C, M, C, M],
-      [M, C, M, C],
+      [BK, C, BK, C],
+      [C, BK, C, BK],
+      [BK, C, BK, C],
+      [C, BK, C, BK],
     ];
     expect(hasAnyValidMove(grid)).toBe(false);
   });
 
   test('true if any empty cell exists', () => {
     const grid: Grid = [
-      [C, M, C, M],
-      [M, C, M, C],
-      [C, M, C, M],
-      [M, C, M, 0],
+      [BK, C, BK, C],
+      [C, BK, C, BK],
+      [BK, C, BK, C],
+      [C, BK, C, 0],
     ];
     expect(hasAnyValidMove(grid)).toBe(true);
   });
 
   test('true if a same-color merge is possible on a full board', () => {
-    // Two adjacent Cs can merge
     const grid: Grid = [
-      [C, C, M, Y],
-      [M, Y, C, M],
-      [Y, C, M, Y],
-      [C, M, Y, C],
+      [BK, BK, C, M],
+      [C, M, BK, C],
+      [M, BK, C, M],
+      [BK, C, M, BK],
     ];
     expect(hasAnyValidMove(grid)).toBe(true);
   });

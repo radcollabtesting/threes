@@ -1,4 +1,4 @@
-import type { Direction, Grid, Position, GameConfig } from './types';
+import type { Direction, Grid, Position, GameConfig, CellValue } from './types';
 import { getEmptyCells } from './board';
 import { pickRandom } from '@threes/rng';
 
@@ -34,7 +34,7 @@ export function getSpawnEdgeCells(
 }
 
 /**
- * Selects where to spawn a new tile after a valid move.
+ * Selects where to spawn a new tile from the queue after a valid move.
  *
  * Cascade (config.spawnOnlyOnChangedLine = true):
  *   1. Empty cells on spawn edge whose row/col is in changedLines.
@@ -56,7 +56,6 @@ export function selectSpawnPosition(
   const emptyEdgeCells = edgeCells.filter(p => grid[p.row][p.col] === 0);
 
   if (config.spawnOnlyOnChangedLine) {
-    // Prefer cells on changed lines
     const candidates = emptyEdgeCells.filter(p => {
       const lineIdx = isHorizontal ? p.row : p.col;
       return changedLines.has(lineIdx);
@@ -64,13 +63,41 @@ export function selectSpawnPosition(
     if (candidates.length > 0) return pickRandom(candidates, rng);
   }
 
-  // Fallback 1: any empty cell on spawn edge
   if (emptyEdgeCells.length > 0) return pickRandom(emptyEdgeCells, rng);
 
-  // Fallback 2: any empty cell on the board
   const allEmpty = getEmptyCells(grid);
   if (allEmpty.length > 0) return pickRandom(allEmpty, rng);
 
-  // Board is completely full — no valid spawn position
   return null;
+}
+
+/**
+ * Spawns tiles from the queue onto the grid.
+ * Spawns up to `count` tiles, limited by queue length and available space.
+ *
+ * @returns Array of spawn events and the number of tiles consumed from queue.
+ */
+export function spawnFromQueue(
+  grid: Grid,
+  queue: CellValue[],
+  direction: Direction,
+  changedLines: Set<number>,
+  config: GameConfig,
+  rng: () => number,
+  count: number,
+): { spawned: { pos: Position; value: CellValue }[]; consumed: number } {
+  const spawned: { pos: Position; value: CellValue }[] = [];
+  let consumed = 0;
+
+  for (let i = 0; i < count && consumed < queue.length; i++) {
+    const pos = selectSpawnPosition(grid, direction, changedLines, config, rng);
+    if (!pos) break; // no space
+
+    const value = queue[consumed];
+    grid[pos.row][pos.col] = value;
+    spawned.push({ pos, value });
+    consumed++;
+  }
+
+  return { spawned, consumed };
 }

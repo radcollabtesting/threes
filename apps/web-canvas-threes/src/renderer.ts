@@ -1,16 +1,15 @@
 /**
- * Canvas renderer for the color mixing game.
+ * Canvas renderer for the color breakdown game.
  *
- * Draws the board, tiles, next-tile preview, score, and game-over overlay.
+ * Draws the board, tiles, queue preview, score, and game-over overlay.
  * Tile colors are computed dynamically from the color encoding system.
  */
 
-import { scoreTile, tileHex, tileTextColor, tileLabel, tileDisplayDots, getMergePartners, encodeTile, canMerge, tileColorIndex, tileDots, mergeResult, GRAY_IDX, grayHasValidMix, type CellValue, type Grid, type Direction, type Position } from '@threes/game-logic';
+import { scoreTile, tileHex, tileTextColor, tileLabel, tileDisplayDots, getMergePartners, encodeTile, canMerge, tileColorIndex, tileDots, mergeResult, type CellValue, type Grid, type Direction, type Position } from '@threes/game-logic';
 import { COLORS, SIZES, BOARD, ANIMATION, BUTTON, SCORE_LIST, DARK_THEME, LIGHT_THEME, type ThemeColors } from '@threes/design-tokens';
 import type { AnimState } from './animation';
 import type { DragState, TilePreview } from './drag';
 import type { ScoreEntry } from './score-history';
-import type { MixState } from './mix-state';
 
 export interface GameOverData {
   currentScore: number;
@@ -37,6 +36,9 @@ interface MergeIndicatorSet {
   bottom: MergeIndicator[];
 }
 
+/** Max queue tiles to show in the preview bar */
+const QUEUE_PREVIEW_COUNT = 3;
+
 export class Renderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -45,18 +47,10 @@ export class Renderer {
   private _boardY = 0;
   private _newGameBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
   private _continueBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
-  /** Mix button bounds keyed by "row,col" */
-  private _mixBtnBounds: Map<string, { x: number; y: number; w: number; h: number }> = new Map();
-  private _confirmBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
-  private _cancelBtnBounds: { x: number; y: number; w: number; h: number } | null = null;
 
-  /** When true, color letter labels are shown on tiles. */
   colorBlindMode = false;
-
-  /** When true, uses dark theme; when false, uses light theme. */
   darkMode = true;
 
-  /** Returns the active theme colors based on darkMode setting. */
   get theme(): ThemeColors {
     return this.darkMode ? DARK_THEME : LIGHT_THEME;
   }
@@ -67,40 +61,18 @@ export class Renderer {
     this.resize();
   }
 
-  /** Current uniform scale factor (needed by drag progress calculation) */
   get currentScale(): number {
     return this._scale;
   }
 
-  /** Returns the "New Game" button bounds in CSS px, or null if not rendered. */
   get newGameButtonBounds(): { x: number; y: number; w: number; h: number } | null {
     return this._newGameBtnBounds;
   }
 
-  /** Returns the tutorial "Continue" button bounds in CSS px, or null if not rendered. */
   get continueButtonBounds(): { x: number; y: number; w: number; h: number } | null {
     return this._continueBtnBounds;
   }
 
-  /** Returns mix button bounds map for hit testing */
-  get mixButtonBounds(): Map<string, { x: number; y: number; w: number; h: number }> {
-    return this._mixBtnBounds;
-  }
-
-  /** Returns the confirm button bounds in CSS px, or null if not rendered. */
-  get confirmButtonBounds(): { x: number; y: number; w: number; h: number } | null {
-    return this._confirmBtnBounds;
-  }
-
-  /** Returns the cancel button bounds in CSS px, or null if not rendered. */
-  get cancelButtonBounds(): { x: number; y: number; w: number; h: number } | null {
-    return this._cancelBtnBounds;
-  }
-
-  /**
-   * Hit-test a CSS coordinate against the grid, returning the cell position
-   * or null if outside the board.
-   */
   hitTestGrid(clientX: number, clientY: number): Position | null {
     const s = this._scale;
     const bx = this._boardX;
@@ -122,22 +94,6 @@ export class Renderer {
     return null;
   }
 
-  /**
-   * Hit-test a CSS coordinate against any visible Mix button.
-   * Returns the Gray tile's position or null.
-   */
-  hitTestMixButton(clientX: number, clientY: number): Position | null {
-    for (const [key, bounds] of this._mixBtnBounds) {
-      if (clientX >= bounds.x && clientX <= bounds.x + bounds.w &&
-          clientY >= bounds.y && clientY <= bounds.y + bounds.h) {
-        const [r, c] = key.split(',').map(Number);
-        return { row: r, col: c };
-      }
-    }
-    return null;
-  }
-
-  /** Recalculates canvas size and scale factor (call on window resize) */
   resize(): void {
     const dpr = window.devicePixelRatio || 1;
     const vw = window.innerWidth;
@@ -165,8 +121,8 @@ export class Renderer {
   }
 
   /**
-   * Main render pass — call once per animation frame.
-   * @param drag  Pass the active DragState during dragging/snapping, or null.
+   * Main render pass.
+   * @param queue  The tile queue (for preview bar display).
    */
   render(
     grid: Grid,
@@ -177,28 +133,22 @@ export class Renderer {
     gameOverData?: GameOverData | null,
     currentScore?: number,
     tutorialInfo?: TutorialRenderInfo | null,
-    mixState?: MixState | null,
+    _mixState?: unknown,
     multipliers?: number[][] | null,
+    queue?: CellValue[] | null,
   ): void {
     const ctx = this.ctx;
     const s = this._scale;
     const vw = this.canvas.width / (window.devicePixelRatio || 1);
     const vh = this.canvas.height / (window.devicePixelRatio || 1);
 
-    // ── Background ────────────────────────────────────────
+    // ── Background
     const theme = this.theme;
     ctx.fillStyle = theme.background;
     ctx.fillRect(0, 0, vw, vh);
 
-    // ── Tutorial header or score display ──────────────────
-    if (tutorialInfo) {
-      const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-      ctx.fillStyle = theme.uiText;
-      ctx.font = `bold ${16 * s}px ${font}`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      ctx.fillText(tutorialInfo.headerText, vw / 2, this._boardY - 12 * s);
-    } else if (currentScore !== undefined) {
+    // ── Score display
+    if (currentScore !== undefined) {
       const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
       ctx.fillStyle = theme.scoreText;
       ctx.font = `bold ${20 * s}px ${font}`;
@@ -207,7 +157,7 @@ export class Renderer {
       ctx.fillText(`Score: ${currentScore}`, vw / 2, 30 * s);
     }
 
-    // ── Board shake offset ────────────────────────────────
+    // ── Board shake offset
     let shakeX = 0;
     if (anim.shake.active && anim.shake.progress < 1) {
       const t = anim.shake.progress;
@@ -222,31 +172,7 @@ export class Renderer {
     const gy = SIZES.gapY * s;
     const br = SIZES.tileBorderRadius * s;
 
-    // ── Tutorial board border (behind cells) ────────────
-    if (tutorialInfo && tutorialInfo.showBorder) {
-      const borderPad = 6 * s;
-      const borderX = bx - borderPad;
-      const borderY = by - borderPad;
-      const borderW = BOARD.width * s + borderPad * 2;
-      const borderH = BOARD.height * s + borderPad * 2;
-      const borderR = br + 2 * s;
-      ctx.strokeStyle = '#888888';
-      ctx.lineWidth = 3 * s;
-      ctx.beginPath();
-      ctx.moveTo(borderX + borderR, borderY);
-      ctx.lineTo(borderX + borderW - borderR, borderY);
-      ctx.quadraticCurveTo(borderX + borderW, borderY, borderX + borderW, borderY + borderR);
-      ctx.lineTo(borderX + borderW, borderY + borderH - borderR);
-      ctx.quadraticCurveTo(borderX + borderW, borderY + borderH, borderX + borderW - borderR, borderY + borderH);
-      ctx.lineTo(borderX + borderR, borderY + borderH);
-      ctx.quadraticCurveTo(borderX, borderY + borderH, borderX, borderY + borderH - borderR);
-      ctx.lineTo(borderX, borderY + borderR);
-      ctx.quadraticCurveTo(borderX, borderY, borderX + borderR, borderY);
-      ctx.closePath();
-      ctx.stroke();
-    }
-
-    // ── Empty cell slots ──────────────────────────────────
+    // ── Empty cell slots
     for (let r = 0; r < SIZES.gridSize; r++) {
       for (let c = 0; c < SIZES.gridSize; c++) {
         const x = bx + c * (tw + gx);
@@ -255,7 +181,7 @@ export class Renderer {
       }
     }
 
-    // ── Tiles ─────────────────────────────────────────────
+    // ── Tiles
     const isDragActive = drag && drag.preview &&
       (drag.phase === 'dragging' || drag.phase === 'snapping');
 
@@ -265,176 +191,19 @@ export class Renderer {
       this.drawStaticTiles(grid, anim, bx, by, tw, th, gx, gy, br, s, multipliers);
     }
 
-    // ── Mix mode UI ──────────────────────────────────────
-    this._mixBtnBounds.clear();
-    this._confirmBtnBounds = null;
-    this._cancelBtnBounds = null;
-    const mixActive = mixState && mixState.phase !== 'idle';
-
-    if (!isDragActive && !gameOver && !tutorialInfo) {
-      if (mixActive && mixState) {
-        // Draw mix prompt text above board
-        const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-        ctx.fillStyle = theme.uiText;
-        ctx.font = `bold ${16 * s}px ${font}`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText(mixState.promptText, vw / 2, this._boardY - 12 * s);
-
-        // Dim the entire board, then brighten valid targets
-        ctx.fillStyle = theme.mixOverlay;
-        ctx.fillRect(bx, by, BOARD.width * s, BOARD.height * s);
-
-        if (mixState.phase === 'previewing' && mixState.grayPos && mixState.previewResultValue !== null) {
-          // ── Preview mode: show result on Gray, dim sources ──
-          // Draw result tile at Gray position
-          const gx2 = bx + mixState.grayPos.col * (tw + gx);
-          const gy2 = by + mixState.grayPos.row * (th + gy);
-          this.drawTile(gx2, gy2, tw, th, br, s, mixState.previewResultValue, 1, 1);
-          // Green border on result preview
-          this.drawSelectionBorder(gx2, gy2, tw, th, br, s, '#00FF88');
-
-          // Dim source tiles (show them faded to indicate they'll be consumed)
-          if (mixState.firstSelection) {
-            const fx = bx + mixState.firstSelection.col * (tw + gx);
-            const fy = by + mixState.firstSelection.row * (th + gy);
-            const fv = grid[mixState.firstSelection.row][mixState.firstSelection.col];
-            this.drawTile(fx, fy, tw, th, br, s, fv, 1, 0.4);
-          }
-          if (mixState.secondSelection) {
-            const sx = bx + mixState.secondSelection.col * (tw + gx);
-            const sy = by + mixState.secondSelection.row * (th + gy);
-            const sv = grid[mixState.secondSelection.row][mixState.secondSelection.col];
-            this.drawTile(sx, sy, tw, th, br, s, sv, 1, 0.4);
-          }
-
-          // ── Confirm / Cancel buttons below the board ──
-          this.drawConfirmCancelButtons(vw, by, s);
-
-        } else {
-          // ── Selection mode (selectingFirst / selectingSecond) ──
-          // Highlight Gray tile
-          if (mixState.grayPos) {
-            const gx2 = bx + mixState.grayPos.col * (tw + gx);
-            const gy2 = by + mixState.grayPos.row * (th + gy);
-            this.drawTile(gx2, gy2, tw, th, br, s, grid[mixState.grayPos.row][mixState.grayPos.col], 1, 0.6);
-          }
-
-          // Highlight first selected tile
-          if (mixState.firstSelection) {
-            const fx = bx + mixState.firstSelection.col * (tw + gx);
-            const fy = by + mixState.firstSelection.row * (th + gy);
-            const fv = grid[mixState.firstSelection.row][mixState.firstSelection.col];
-            this.drawTile(fx, fy, tw, th, br, s, fv, 1, 1);
-            this.drawSelectionBorder(fx, fy, tw, th, br, s, '#00FF88');
-          }
-
-          // Highlight valid targets with glowing border
-          for (const target of mixState.validTargets) {
-            const tx2 = bx + target.col * (tw + gx);
-            const ty2 = by + target.row * (th + gy);
-            const tv = grid[target.row][target.col];
-            this.drawTile(tx2, ty2, tw, th, br, s, tv, 1, 1);
-            this.drawSelectionBorder(tx2, ty2, tw, th, br, s, 'rgba(255,255,255,0.8)', 2);
-          }
-        }
-      } else if (!anim.mixSlide) {
-        // Draw "Mix" buttons on Gray tiles (when not in mix mode or animating)
-        this.drawMixButtons(grid, bx, by, tw, th, gx, gy, br, s);
-      }
+    // ── Queue preview bar
+    if (!gameOver) {
+      this.drawQueuePreview(queue ?? [], bx, by, tw, th, gx, br, s, anim, vw);
     }
 
-    // ── Ripple animation (catalyst mix) ─────────────────
-    if (anim.ripple && anim.ripple.progress < 1) {
-      const rp = anim.ripple;
-      const rx = bx + rp.col * (tw + gx) + tw / 2;
-      const ry = by + rp.row * (th + gy) + th / 2;
-      const maxRadius = Math.max(tw, th) * 1.5;
-      const radius = maxRadius * easeOut(rp.progress);
-      const alpha = 1 - rp.progress;
-
-      ctx.save();
-      ctx.strokeStyle = rp.color;
-      ctx.lineWidth = 3 * s;
-      ctx.globalAlpha = alpha * 0.7;
-      ctx.beginPath();
-      ctx.arc(rx, ry, radius, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Second smaller ring
-      if (rp.progress > 0.1) {
-        const r2 = maxRadius * easeOut(Math.max(0, rp.progress - 0.15));
-        ctx.globalAlpha = alpha * 0.4;
-        ctx.beginPath();
-        ctx.arc(rx, ry, r2, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-
-    // ── Next tile preview ─────────────────────────────────
-    const hideNextTile = (tutorialInfo?.hideNextTile ?? false) || mixActive;
-
-    if (!hideNextTile) {
-      const nextY = by + BOARD.height * s + SIZES.nextTileGapFromBoard * s;
-      const nextX = bx + (BOARD.width * s - tw) / 2;
-
-      const nt = anim.nextTile;
-      if (nt.active && nt.progress < 1) {
-        const p = nt.progress;
-        if (p < 0.5) {
-          const alpha = 1 - p / 0.5;
-          if (nt.oldValue > 0) {
-            this.drawTile(nextX, nextY, tw, th, br, s, nt.oldValue, 1, alpha);
-          }
-        } else {
-          const alpha = (p - 0.5) / 0.5;
-          if (nt.newValue > 0) {
-            this.drawTile(nextX, nextY, tw, th, br, s, nt.newValue, 1, alpha);
-          }
-        }
-      } else if (nextTile > 0) {
-        this.drawTile(nextX, nextY, tw, th, br, s, nextTile, 1, 1);
-      }
-
-      // ── "next" label ──────────────────────────────────────
-      const labelY = nextY + th + SIZES.nextLabelGap * s;
-      ctx.fillStyle = theme.nextLabelText;
-      ctx.font = `${SIZES.nextLabelFontSize * s}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      ctx.fillText('next', nextX + tw / 2, labelY);
-    }
-
-    // ── Tutorial "Continue" button ──────────────────────
-    this._continueBtnBounds = null;
-
-    if (tutorialInfo && tutorialInfo.showContinue) {
-      const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-      const contY = by + BOARD.height * s + SIZES.nextTileGapFromBoard * s;
-      const btnW = BUTTON.width * s;
-      const btnH = BUTTON.height * s;
-      const btnX = vw / 2 - btnW / 2;
-      const btnR = BUTTON.borderRadius * s;
-
-      this.roundRect(btnX, contY, btnW, btnH, btnR, BUTTON.fill);
-      ctx.fillStyle = BUTTON.text;
-      ctx.font = `bold ${BUTTON.fontSize * s}px ${font}`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('Continue', btnX + btnW / 2, contY + btnH / 2);
-
-      this._continueBtnBounds = { x: btnX, y: contY, w: btnW, h: btnH };
-    }
-
-    // ── Game-over overlay ─────────────────────────────────
+    // ── Game-over overlay
     this._newGameBtnBounds = null;
 
     if (gameOver) {
       ctx.fillStyle = theme.overlayBackground;
       ctx.fillRect(0, 0, vw, vh);
 
-      // ── Per-tile score labels ────────────────────────────
+      // Per-tile score labels
       const scoreFont = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
       ctx.fillStyle = '#FFFFFF';
       ctx.textAlign = 'center';
@@ -457,7 +226,6 @@ export class Renderer {
       const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
       let cursorY = vh * 0.15;
 
-      // "Game Over" title
       ctx.fillStyle = '#FFF';
       ctx.font = `bold ${32 * s}px ${font}`;
       ctx.textAlign = 'center';
@@ -466,19 +234,16 @@ export class Renderer {
       cursorY += 40 * s;
 
       if (gameOverData) {
-        // Current score (large)
         ctx.font = `bold ${24 * s}px ${font}`;
         ctx.fillStyle = '#FFF';
         ctx.fillText(`Score: ${gameOverData.currentScore}`, cx, cursorY);
         cursorY += 36 * s;
 
-        // Score history header
         ctx.font = `bold ${SCORE_LIST.headerFontSize * s}px ${font}`;
         ctx.fillStyle = SCORE_LIST.normalText;
         ctx.fillText('Score History', cx, cursorY);
         cursorY += 28 * s;
 
-        // Score list
         const visible = gameOverData.scores.slice(0, SCORE_LIST.maxVisible);
         const lh = SCORE_LIST.lineHeight * s;
 
@@ -487,7 +252,6 @@ export class Renderer {
           const isHighlighted = i === gameOverData.currentScoreIndex;
 
           if (isHighlighted) {
-            // Highlighted pill background
             const pillW = 120 * s;
             const pillH = lh;
             this.roundRect(cx - pillW / 2, cursorY - pillH / 2, pillW, pillH, pillH / 2, SCORE_LIST.highlightFill);
@@ -513,7 +277,6 @@ export class Renderer {
         }
       }
 
-      // "New Game" button
       cursorY += 24 * s;
       const btnW = BUTTON.width * s;
       const btnH = BUTTON.height * s;
@@ -531,12 +294,99 @@ export class Renderer {
     }
   }
 
-  /* ── Tile drawing modes ──────────────────────────────── */
+  /* ── Queue preview bar ────────────────────────────────── */
 
   /**
-   * Static tile drawing: used for keyboard moves and idle state.
-   * Reads from the live grid and applies slide/merge/spawn animations.
+   * Draws the queue preview: up to 3 tiles + "+X more" badge.
    */
+  private drawQueuePreview(
+    queue: CellValue[],
+    bx: number, by: number,
+    tw: number, th: number,
+    gx: number, br: number,
+    s: number, anim: AnimState,
+    vw: number,
+  ): void {
+    const ctx = this.ctx;
+    const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
+    const previewY = by + BOARD.height * s + SIZES.nextTileGapFromBoard * s;
+    const previewTileW = tw * 0.65;
+    const previewTileH = th * 0.65;
+    const previewGap = 6 * s;
+    const previewBr = br * 0.65;
+
+    const visibleCount = Math.min(queue.length, QUEUE_PREVIEW_COUNT);
+    const remaining = queue.length - visibleCount;
+
+    if (visibleCount === 0) {
+      // Empty queue indicator
+      ctx.fillStyle = this.theme.nextLabelText;
+      ctx.font = `${12 * s}px ${font}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText('queue empty', vw / 2, previewY + previewTileH / 2 - 6 * s);
+      return;
+    }
+
+    // Calculate total width for centering
+    const badgeW = remaining > 0 ? 40 * s : 0;
+    const totalW = visibleCount * previewTileW + (visibleCount - 1) * previewGap + (remaining > 0 ? previewGap + badgeW : 0);
+    let px = (vw - totalW) / 2;
+
+    // Draw "next" label above
+    ctx.fillStyle = this.theme.nextLabelText;
+    ctx.font = `${SIZES.nextLabelFontSize * s}px ${font}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('queue', vw / 2, previewY - 4 * s);
+
+    // Draw preview tiles
+    for (let i = 0; i < visibleCount; i++) {
+      const val = queue[i];
+
+      // Next-tile crossfade for the first tile
+      let alpha = 1;
+      if (i === 0 && anim.nextTile.active && anim.nextTile.progress < 1) {
+        const p = anim.nextTile.progress;
+        if (p < 0.5) {
+          alpha = 1 - p / 0.5;
+          // Show old value fading out
+          if (anim.nextTile.oldValue > 0) {
+            this.drawTile(px, previewY, previewTileW, previewTileH, previewBr, s, anim.nextTile.oldValue, 1, alpha);
+          }
+          px += previewTileW + previewGap;
+          continue;
+        } else {
+          alpha = (p - 0.5) / 0.5;
+        }
+      }
+
+      this.drawTile(px, previewY, previewTileW, previewTileH, previewBr, s, val, 1, alpha);
+      px += previewTileW + previewGap;
+    }
+
+    // Draw "+X more" badge
+    if (remaining > 0) {
+      const badgeH = previewTileH * 0.5;
+      const badgeY = previewY + (previewTileH - badgeH) / 2;
+      const badgeR = badgeH / 2;
+
+      ctx.save();
+      ctx.globalAlpha = 0.7;
+      this.roundRect(px, badgeY, badgeW, badgeH, badgeR, this.theme.nextLabelText);
+      ctx.restore();
+
+      ctx.fillStyle = this.theme.background;
+      ctx.font = `bold ${10 * s}px ${font}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`+${remaining}`, px + badgeW / 2, badgeY + badgeH / 2);
+    }
+  }
+
+  /* ── Tile drawing modes ──────────────────────────────── */
+
   private drawStaticTiles(
     grid: Grid, anim: AnimState,
     bx: number, by: number,
@@ -550,17 +400,12 @@ export class Renderer {
         const val = grid[r][c];
         if (val === 0) continue;
 
-        // Hide result tile at mix target during slide animation
-        if (anim.mixSlide && anim.mixSlide.progress < 1 &&
-            r === anim.mixSlide.targetRow && c === anim.mixSlide.targetCol) continue;
-
         const key = `${r},${c}`;
         let x = bx + c * (tw + gx);
         let y = by + r * (th + gy);
         let tileScale = 1;
         let alpha = 1;
 
-        // Slide animation
         const slide = anim.slides.get(key);
         if (slide && slide.progress < 1) {
           const p = easeOut(slide.progress);
@@ -572,7 +417,6 @@ export class Renderer {
           y = fy + (ty - fy) * p;
         }
 
-        // Merge scale pop
         const merge = anim.merges.get(key);
         if (merge && merge.progress < 1) {
           const p = merge.progress;
@@ -582,7 +426,6 @@ export class Renderer {
             : peak - (peak - 1) * ((p - 0.5) / 0.5);
         }
 
-        // Spawn slide in from edge
         const spawn = anim.spawns.get(key);
         if (spawn && spawn.progress < 1) {
           const p = easeOut(spawn.progress);
@@ -596,50 +439,19 @@ export class Renderer {
 
         this.drawTile(x, y, tw, th, br, s, val, tileScale, alpha);
 
-        // Draw catalyst mix multiplier badge (top-left corner)
+        // Draw 2x multiplier badge
         const mult = multipliers?.[r]?.[c] ?? 0;
         if (mult > 0) {
           this.drawMultiplierBadge(x, y, tw, s, mult);
         }
 
-        // Draw merge direction indicators based on grid neighbours
+        // Draw merge direction indicators
         const indicators = this.getMergeIndicators(grid, r, c);
         this.drawMergeIndicators(x, y, tw, th, s, indicators);
       }
     }
-
-    // Draw mix slide source tiles (sliding toward gray target)
-    if (anim.mixSlide && anim.mixSlide.progress < 1) {
-      const ms = anim.mixSlide;
-      const p = easeOut(ms.progress);
-      const targetX = bx + ms.targetCol * (tw + gx);
-      const targetY = by + ms.targetRow * (th + gy);
-
-      // Fade and shrink as tiles approach target
-      const alpha = 1 - p * 0.6;
-      const scale = 1 - p * 0.3;
-
-      // Source 1
-      const s1x = bx + ms.src1Col * (tw + gx);
-      const s1y = by + ms.src1Row * (th + gy);
-      this.drawTile(
-        s1x + (targetX - s1x) * p, s1y + (targetY - s1y) * p,
-        tw, th, br, s, ms.src1Value as CellValue, scale, alpha,
-      );
-
-      // Source 2
-      const s2x = bx + ms.src2Col * (tw + gx);
-      const s2y = by + ms.src2Row * (th + gy);
-      this.drawTile(
-        s2x + (targetX - s2x) * p, s2y + (targetY - s2y) * p,
-        tw, th, br, s, ms.src2Value as CellValue, scale, alpha,
-      );
-    }
   }
 
-  /**
-   * Drag tile drawing: tiles follow the pointer at interpolated positions.
-   */
   private drawDragTiles(
     drag: DragState,
     bx: number, by: number,
@@ -651,7 +463,6 @@ export class Renderer {
     const preview = drag.preview!;
     const progress = drag.progress;
 
-    // Build a virtual grid from preview tile from-positions for indicators
     const virtualGrid: Grid = Array.from({ length: SIZES.gridSize }, () =>
       Array.from({ length: SIZES.gridSize }, () => 0 as CellValue),
     );
@@ -660,7 +471,6 @@ export class Renderer {
     }
 
     if (!preview.valid) {
-      // ── Invalid move: rubber-band all tiles uniformly ───
       const [dr, dc] = directionOffset(preview.direction);
       const offsetX = dc * progress * (tw + gx);
       const offsetY = dr * progress * (th + gy);
@@ -677,7 +487,6 @@ export class Renderer {
       return;
     }
 
-    // ── Valid move: two-layer z-ordering ──────────────────
     const nonMoving: TilePreview[] = [];
     const moving: TilePreview[] = [];
 
@@ -685,7 +494,6 @@ export class Renderer {
       (tp.moves ? moving : nonMoving).push(tp);
     }
 
-    // Layer 1: non-moving tiles (behind — includes merge targets)
     for (const tp of nonMoving) {
       const x = bx + tp.fromCol * (tw + gx);
       const y = by + tp.fromRow * (th + gy);
@@ -696,7 +504,6 @@ export class Renderer {
       this.drawMergeIndicators(x, y, tw, th, s, indicators);
     }
 
-    // Layer 2: moving tiles (on top — they slide over merge targets)
     for (const tp of moving) {
       const fromX = bx + tp.fromCol * (tw + gx);
       const fromY = by + tp.fromRow * (th + gy);
@@ -713,14 +520,13 @@ export class Renderer {
       this.drawMergeIndicators(x, y, tw, th, s, indicators);
     }
 
-    // Layer 3: merge result preview at tile intersections
+    // Merge result preview at tile intersections
     for (const ev of preview.moveEvents) {
       if (ev.type !== 'merge' || !ev.from) continue;
 
       const movingTp = preview.tiles.get(`${ev.from.row},${ev.from.col}`);
       if (!movingTp) continue;
 
-      // Moving tile's current interpolated position
       const mFromX = bx + movingTp.fromCol * (tw + gx);
       const mFromY = by + movingTp.fromRow * (th + gy);
       const mToX = bx + movingTp.toCol * (tw + gx);
@@ -728,11 +534,9 @@ export class Renderer {
       const mx = mFromX + (mToX - mFromX) * progress;
       const my = mFromY + (mToY - mFromY) * progress;
 
-      // Merge target tile position (stationary)
       const tx = bx + ev.to.col * (tw + gx);
       const ty = by + ev.to.row * (th + gy);
 
-      // Compute overlap rectangle
       const overlapLeft = Math.max(mx, tx);
       const overlapTop = Math.max(my, ty);
       const overlapRight = Math.min(mx + tw, tx + tw);
@@ -742,43 +546,49 @@ export class Renderer {
       const oh = overlapBottom - overlapTop;
 
       if (ow > 0 && oh > 0) {
+        // For milestone splits, show the merge-point tile color
+        // For regular splits, show a "poof" effect (white flash)
         const resultValue = ev.value;
-        const resultColor = tileHex(resultValue);
-        const resultLabel = tileLabel(resultValue);
-        const resultTextColor = tileTextColor(resultValue);
+        const isMilestone = ev.isMilestone;
+        const resultColor = resultValue > 0 ? tileHex(resultValue) : '#FFFFFF';
+        const resultLabel = resultValue > 0 ? tileLabel(resultValue) : null;
+        const resultTextColor2 = resultValue > 0 ? tileTextColor(resultValue) : '#000000';
         const overlapBr = Math.min(br, ow / 2, oh / 2);
 
         const ctx = this.ctx;
         ctx.save();
 
-        // Fill with rounded rect matching card style
-        this.roundRect(overlapLeft, overlapTop, ow, oh, overlapBr, resultColor);
+        // For regular splits (value=0), show a dissolve effect
+        if (resultValue === 0) {
+          ctx.globalAlpha = 0.5;
+          this.roundRect(overlapLeft, overlapTop, ow, oh, overlapBr, '#FFFFFF');
+        } else {
+          this.roundRect(overlapLeft, overlapTop, ow, oh, overlapBr, resultColor);
 
-        // Draw 2px border
-        const borderW = 2 * s;
-        ctx.strokeStyle = this.theme.tileBorder;
-        ctx.lineWidth = borderW;
-        ctx.beginPath();
-        ctx.moveTo(overlapLeft + overlapBr, overlapTop);
-        ctx.lineTo(overlapLeft + ow - overlapBr, overlapTop);
-        ctx.quadraticCurveTo(overlapLeft + ow, overlapTop, overlapLeft + ow, overlapTop + overlapBr);
-        ctx.lineTo(overlapLeft + ow, overlapTop + oh - overlapBr);
-        ctx.quadraticCurveTo(overlapLeft + ow, overlapTop + oh, overlapLeft + ow - overlapBr, overlapTop + oh);
-        ctx.lineTo(overlapLeft + overlapBr, overlapTop + oh);
-        ctx.quadraticCurveTo(overlapLeft, overlapTop + oh, overlapLeft, overlapTop + oh - overlapBr);
-        ctx.lineTo(overlapLeft, overlapTop + overlapBr);
-        ctx.quadraticCurveTo(overlapLeft, overlapTop, overlapLeft + overlapBr, overlapTop);
-        ctx.closePath();
-        ctx.stroke();
+          const borderW = 2 * s;
+          ctx.strokeStyle = this.theme.tileBorder;
+          ctx.lineWidth = borderW;
+          ctx.beginPath();
+          ctx.moveTo(overlapLeft + overlapBr, overlapTop);
+          ctx.lineTo(overlapLeft + ow - overlapBr, overlapTop);
+          ctx.quadraticCurveTo(overlapLeft + ow, overlapTop, overlapLeft + ow, overlapTop + overlapBr);
+          ctx.lineTo(overlapLeft + ow, overlapTop + oh - overlapBr);
+          ctx.quadraticCurveTo(overlapLeft + ow, overlapTop + oh, overlapLeft + ow - overlapBr, overlapTop + oh);
+          ctx.lineTo(overlapLeft + overlapBr, overlapTop + oh);
+          ctx.quadraticCurveTo(overlapLeft, overlapTop + oh, overlapLeft, overlapTop + oh - overlapBr);
+          ctx.lineTo(overlapLeft, overlapTop + overlapBr);
+          ctx.quadraticCurveTo(overlapLeft, overlapTop, overlapLeft + overlapBr, overlapTop);
+          ctx.closePath();
+          ctx.stroke();
 
-        // Draw result label centered in overlap if there's enough room
-        if (this.colorBlindMode && resultLabel && ow > 8 * s && oh > 8 * s) {
-          const fontSize = SIZES.tileFontSize * s * Math.min(1, ow / tw, oh / th);
-          ctx.fillStyle = resultTextColor;
-          ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(resultLabel, overlapLeft + ow / 2, overlapTop + oh / 2);
+          if (this.colorBlindMode && resultLabel && ow > 8 * s && oh > 8 * s) {
+            const fontSize = SIZES.tileFontSize * s * Math.min(1, ow / tw, oh / th);
+            ctx.fillStyle = resultTextColor2;
+            ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(resultLabel, overlapLeft + ow / 2, overlapTop + oh / 2);
+          }
         }
         ctx.restore();
       }
@@ -813,7 +623,6 @@ export class Renderer {
 
     this.roundRect(x, y, w, h, r, fill);
 
-    // Draw 2px border
     const borderW = 2 * s;
     ctx.strokeStyle = this.theme.tileBorder;
     ctx.lineWidth = borderW;
@@ -830,8 +639,8 @@ export class Renderer {
     ctx.closePath();
     ctx.stroke();
 
-    // Only draw label for named colors when color blind mode is on
-    if (this.colorBlindMode && label) {
+    // Always draw label (not just color blind mode) since we have many similar colors
+    if (label) {
       const fontSize = SIZES.tileFontSize * s;
       ctx.fillStyle = text;
       ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
@@ -840,7 +649,7 @@ export class Renderer {
       ctx.fillText(label, x + w / 2, y + h / 2);
     }
 
-    // Draw white dots in top-right corner (scoring tier indicator)
+    // Draw dots in top-right corner
     const dots = tileDisplayDots(value);
     if (dots > 0) {
       const dotRadius = 3 * s;
@@ -859,11 +668,6 @@ export class Renderer {
     ctx.restore();
   }
 
-  /**
-   * Compute merge direction indicators for a tile based on its row and column
-   * in the grid. Scans outward from the tile in each direction, tracking
-   * whether any non-empty tile blocks the path to a merge partner.
-   */
   private getMergeIndicators(
     grid: Grid, row: number, col: number,
   ): MergeIndicatorSet {
@@ -875,7 +679,6 @@ export class Renderer {
       if (!arr.some(i => i.colorIndex === ci)) arr.push({ colorIndex: ci, blocked });
     };
 
-    // Scan left (from col-1 toward 0)
     let blocked = false;
     for (let c = col - 1; c >= 0; c--) {
       const other = grid[row][c];
@@ -884,7 +687,6 @@ export class Renderer {
         blocked = true;
       }
     }
-    // Scan right (from col+1 toward end)
     blocked = false;
     for (let c = col + 1; c < SIZES.gridSize; c++) {
       const other = grid[row][c];
@@ -893,7 +695,6 @@ export class Renderer {
         blocked = true;
       }
     }
-    // Scan up (from row-1 toward 0)
     blocked = false;
     for (let r = row - 1; r >= 0; r--) {
       const other = grid[r][col];
@@ -902,7 +703,6 @@ export class Renderer {
         blocked = true;
       }
     }
-    // Scan down (from row+1 toward end)
     blocked = false;
     for (let r = row + 1; r < SIZES.gridSize; r++) {
       const other = grid[r][col];
@@ -915,11 +715,6 @@ export class Renderer {
     return result;
   }
 
-  /**
-   * Draw merge direction indicator lines on tile edges.
-   * Each line is 2px thick × 8px long (scaled), colored with the partner's color.
-   * Blocked indicators are drawn with black dashes over the color.
-   */
   private drawMergeIndicators(
     x: number, y: number, w: number, h: number, s: number,
     indicators: MergeIndicatorSet,
@@ -929,7 +724,6 @@ export class Renderer {
     const lineL = 8 * s;
     const gap = 2 * s;
 
-    // Helper: draw a solid line segment, with 50% opacity if blocked
     const drawLine = (lx: number, ly: number, lw: number, lh: number, color: string, blocked: boolean) => {
       if (blocked) ctx.globalAlpha = 0.5;
       ctx.fillStyle = color;
@@ -937,7 +731,6 @@ export class Renderer {
       if (blocked) ctx.globalAlpha = 1.0;
     };
 
-    // Left edge: vertical lines stacked vertically, centered
     if (indicators.left.length > 0) {
       const count = indicators.left.length;
       const totalH = count * lineL + (count - 1) * gap;
@@ -947,8 +740,6 @@ export class Renderer {
         iy += lineL + gap;
       }
     }
-
-    // Right edge
     if (indicators.right.length > 0) {
       const count = indicators.right.length;
       const totalH = count * lineL + (count - 1) * gap;
@@ -958,8 +749,6 @@ export class Renderer {
         iy += lineL + gap;
       }
     }
-
-    // Top edge: horizontal lines stacked horizontally, centered
     if (indicators.top.length > 0) {
       const count = indicators.top.length;
       const totalW = count * lineL + (count - 1) * gap;
@@ -969,8 +758,6 @@ export class Renderer {
         ix += lineL + gap;
       }
     }
-
-    // Bottom edge
     if (indicators.bottom.length > 0) {
       const count = indicators.bottom.length;
       const totalW = count * lineL + (count - 1) * gap;
@@ -982,10 +769,6 @@ export class Renderer {
     }
   }
 
-  /**
-   * Draw a catalyst mix multiplier badge ("2x", "4x", etc.) in the top-left
-   * corner of a tile.
-   */
   private drawMultiplierBadge(
     x: number, y: number,
     w: number, s: number,
@@ -993,7 +776,7 @@ export class Renderer {
   ): void {
     const ctx = this.ctx;
     const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    const text = `${multiplier}x`;
+    const text = `${Math.pow(2, multiplier)}x`;
     const fontSize = 9 * s;
     const padX = 4 * s;
     const padY = 2 * s;
@@ -1016,126 +799,6 @@ export class Renderer {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, badgeX + badgeW / 2, badgeY + badgeH / 2);
-  }
-
-  /**
-   * Draw a rounded-rect selection border on a tile.
-   */
-  private drawSelectionBorder(
-    x: number, y: number,
-    w: number, h: number,
-    r: number, s: number,
-    color: string, lineWidth = 3,
-  ): void {
-    const ctx = this.ctx;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = lineWidth * s;
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
-    ctx.stroke();
-  }
-
-  /**
-   * Draw Confirm and Cancel buttons below the board during mix preview.
-   */
-  private drawConfirmCancelButtons(
-    vw: number, boardY: number, s: number,
-  ): void {
-    const ctx = this.ctx;
-    const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    const btnW = BUTTON.width * s;
-    const btnH = BUTTON.height * s;
-    const btnR = BUTTON.borderRadius * s;
-    const cx = vw / 2;
-    const baseY = boardY + BOARD.height * s + SIZES.nextTileGapFromBoard * s;
-
-    // Confirm button (green)
-    const confirmX = cx - btnW / 2;
-    const confirmY = baseY;
-    this.roundRect(confirmX, confirmY, btnW, btnH, btnR, '#00CC66');
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = `bold ${BUTTON.fontSize * s}px ${font}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('Confirm', confirmX + btnW / 2, confirmY + btnH / 2);
-    this._confirmBtnBounds = { x: confirmX, y: confirmY, w: btnW, h: btnH };
-
-    // Cancel button (below confirm, text-style)
-    const cancelY = confirmY + btnH + 12 * s;
-    const cancelH = btnH * 0.8;
-    const cancelX = cx - btnW / 2;
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = `${(BUTTON.fontSize - 2) * s}px ${font}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('Cancel', cancelX + btnW / 2, cancelY + cancelH / 2);
-    this._cancelBtnBounds = { x: cancelX, y: cancelY, w: btnW, h: cancelH };
-  }
-
-  /**
-   * Draw "Mix" pill buttons on all Gray tiles.
-   * Faded + disabled if the Gray has no valid mix combos.
-   */
-  private drawMixButtons(
-    grid: Grid,
-    bx: number, by: number,
-    tw: number, th: number,
-    gx: number, gy: number,
-    br: number, s: number,
-  ): void {
-    const ctx = this.ctx;
-    const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-
-    for (let r = 0; r < SIZES.gridSize; r++) {
-      for (let c = 0; c < SIZES.gridSize; c++) {
-        const val = grid[r][c];
-        if (val === 0) continue;
-        if (tileColorIndex(val) !== GRAY_IDX) continue;
-        // Only show Mix button on white Gray tiles (dots >= 2)
-        if (tileDots(val) < 2) continue;
-
-        const hasValidMix = grayHasValidMix(grid, { row: r, col: c });
-
-        // Position Mix button centered on tile
-        const tileX = bx + c * (tw + gx);
-        const tileY = by + r * (th + gy);
-        const btnW = 36 * s;
-        const btnH = 18 * s;
-        const btnX = tileX + (tw - btnW) / 2;
-        const btnY = tileY + (th - btnH) / 2;
-        const btnR = btnH / 2;
-
-        // Pill background (faded when disabled)
-        ctx.save();
-        ctx.globalAlpha = hasValidMix ? 0.9 : 0.3;
-        this.roundRect(btnX, btnY, btnW, btnH, btnR, '#000000');
-        ctx.restore();
-
-        // "Mix" text (faded when disabled)
-        ctx.save();
-        ctx.globalAlpha = hasValidMix ? 1 : 0.4;
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = `bold ${10 * s}px ${font}`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('Mix', btnX + btnW / 2, btnY + btnH / 2);
-        ctx.restore();
-
-        // Only store bounds for hit testing if valid
-        if (hasValidMix) {
-          this._mixBtnBounds.set(`${r},${c}`, { x: btnX, y: btnY, w: btnW, h: btnH });
-        }
-      }
-    }
   }
 
   private roundRect(
@@ -1167,7 +830,6 @@ function easeOut(t: number): number {
   return 1 - (1 - t) * (1 - t);
 }
 
-/** Converts a Direction to [dRow, dCol] for rubber-band offset */
 function directionOffset(direction: Direction): [number, number] {
   switch (direction) {
     case 'left':  return [0, -1];

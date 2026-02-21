@@ -43,17 +43,19 @@ describe('deterministic RNG', () => {
     expect(states1).toEqual(states2);
   });
 
-  test('bag generator is deterministic', () => {
-    const game1 = new ThreesGame({ seed: 123, nextTileStrategy: 'bag' });
-    const game2 = new ThreesGame({ seed: 123, nextTileStrategy: 'bag' });
+  test('queue is deterministic across replays', () => {
+    const seed = 123;
+    const game1 = new ThreesGame({ seed });
+    const game2 = new ThreesGame({ seed });
 
-    expect(game1.nextTile).toBe(game2.nextTile);
+    expect(game1.queue).toEqual(game2.queue);
 
     const dirs = ['up', 'left', 'down', 'right', 'up'] as const;
     for (const dir of dirs) {
       game1.move(dir);
       game2.move(dir);
-      expect(game1.nextTile).toBe(game2.nextTile);
+      expect(game1.queue).toEqual(game2.queue);
+      expect(game1.score).toBe(game2.score);
     }
   });
 });

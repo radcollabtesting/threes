@@ -1,5 +1,5 @@
 import type { Grid, Position } from './types';
-import { CYAN, MAGENTA, YELLOW, tileLabel, tileHex } from './color';
+import { BLACK, tileLabel, tileHex } from './color';
 
 /** Creates a gridSize x gridSize grid filled with 0 (empty) */
 export function createEmptyGrid(gridSize: number): Grid {
@@ -29,25 +29,18 @@ export function isGridFull(grid: Grid): boolean {
   return getEmptyCells(grid).length === 0;
 }
 
-const C = CYAN;
-const M = MAGENTA;
-const Y = YELLOW;
+const BK = BLACK;
 
 /**
- * Fixture board for the color mixing game.
- *   Row 0: [C, M, _, Y]
- *   Row 1: [C, _, _, Y]
- *   Row 2: [_, _, _, _]
- *   Row 3: [_, _, _, _]
- *
- * Swipe up merges C+C (col 0) and Y+Y (col 3) into random primaries.
+ * Fixture board for the color breakdown game.
+ * 4 Black tiles in corners for testing split mechanic.
  */
 export function getFixtureGrid(): Grid {
   return [
-    [C, M, 0, Y],
-    [C, 0, 0, Y],
-    [0, 0, 0, 0],
-    [0, 0, 0, 0],
+    [BK, 0, 0, BK],
+    [0,  0, 0,  0],
+    [0,  0, 0,  0],
+    [BK, 0, 0, BK],
   ];
 }
 
@@ -59,7 +52,7 @@ export function gridToString(grid: Grid): string {
         .map(v => {
           if (v === 0) return '  .  ';
           const label = tileLabel(v);
-          if (label) return `  ${label}  `;
+          if (label) return ` ${label.padStart(2)} `.padEnd(5);
           return tileHex(v).slice(0, 5);
         })
         .join(' '),
