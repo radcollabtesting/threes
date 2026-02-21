@@ -16,7 +16,13 @@ import {
 import { applyMove, hasAnyValidMove } from './move';
 import { spawnFromQueue } from './spawn';
 import { createRng, randomInt, shuffleArray } from '@threes/rng';
-import { BLACK } from './color';
+import {
+  BLACK, WHITE,
+  CYAN, MAGENTA, YELLOW, RED, GREEN, BLUE,
+  LIGHT_GRAY, DARK_GRAY,
+  LIGHT_CYAN, LIGHT_MAGENTA, LIGHT_YELLOW,
+  DARK_RED, DARK_GREEN, DARK_BLUE,
+} from './color';
 
 /**
  * Core game engine for the color breakdown game.
@@ -112,11 +118,14 @@ export class ThreesGame {
    *
    * Turn flow:
    *   1. Apply movement + splits.
-   *   2. Collect split outputs, randomize, add to queue.
-   *   3. Award 2x multiplier on milestone merge-point tiles.
-   *   4. Add split score to running total.
-   *   5. Spawn up to 2 tiles from queue on the opposite edge.
+   *   2. Spawn up to 2 tiles from queue (items from PREVIOUS moves).
+   *   3. Collect NEW split outputs, randomize, add to queue (for NEXT move).
+   *   4. Award 2x multiplier on milestone merge-point tiles.
+   *   5. Add split score to running total.
    *   6. Check game-over.
+   *
+   * Spawning before queuing ensures split outputs persist in the queue
+   * for at least one move, giving the player visual feedback.
    *
    * @returns true if the move was valid and applied; false otherwise.
    */
@@ -140,42 +149,7 @@ export class ThreesGame {
     // Update multiplier grid to follow tile movements
     this._updateMultipliersFromEvents(events);
 
-    // 2. Collect split outputs, randomize, add to queue
-    if (splitOutputs.length > 0) {
-      const shuffled = shuffleArray(splitOutputs, this._rng);
-      this._queue.push(...shuffled);
-    }
-
-    // 3. Award 2x on milestone merge-point tiles
-    for (const ev of events) {
-      if (ev.type === 'merge' && ev.isMilestone) {
-        this._multipliers[ev.to.row][ev.to.col] = 1;
-      }
-    }
-
-    // 4. Add split score (with 2x bonus for tiles that had multipliers)
-    if (this.config.scoringEnabled) {
-      let moveScore = splitScore;
-      // Check if any merged tile had a 2x multiplier
-      for (const ev of events) {
-        if (ev.type === 'merge' && ev.from) {
-          // Check both the source and destination for multipliers
-          // (multipliers were updated by _updateMultipliersFromEvents)
-          // The multiplier at the merge target was set from the combined value
-          const mult = this._multipliers[ev.to.row]?.[ev.to.col] ?? 0;
-          if (mult > 0 && !ev.isMilestone) {
-            // The merged tile had a 2x bonus — double this split's score
-            // (the milestone itself just set the multiplier, don't double its own score)
-            moveScore += splitScore; // double the base
-            // Consume the multiplier
-            this._multipliers[ev.to.row][ev.to.col] = 0;
-          }
-        }
-      }
-      this._score += moveScore;
-    }
-
-    // 5. Spawn from queue
+    // 2. Spawn from queue FIRST (items from previous moves)
     const spawnCount = Math.min(this.config.queueSpawnCount, this._queue.length);
     if (spawnCount > 0) {
       const { spawned, consumed } = spawnFromQueue(
@@ -199,6 +173,35 @@ export class ThreesGame {
           value,
         });
       }
+    }
+
+    // 3. Collect NEW split outputs, randomize, add to queue (for next move)
+    if (splitOutputs.length > 0) {
+      const shuffled = shuffleArray(splitOutputs, this._rng);
+      this._queue.push(...shuffled);
+    }
+
+    // 4. Award 2x on milestone merge-point tiles
+    for (const ev of events) {
+      if (ev.type === 'merge' && ev.isMilestone) {
+        this._multipliers[ev.to.row][ev.to.col] = 1;
+      }
+    }
+
+    // 5. Add split score (with 2x bonus for tiles that had multipliers)
+    if (this.config.scoringEnabled) {
+      let moveScore = splitScore;
+      // Check if any merged tile had a 2x multiplier
+      for (const ev of events) {
+        if (ev.type === 'merge' && ev.from) {
+          const mult = this._multipliers[ev.to.row]?.[ev.to.col] ?? 0;
+          if (mult > 0 && !ev.isMilestone) {
+            moveScore += splitScore;
+            this._multipliers[ev.to.row][ev.to.col] = 0;
+          }
+        }
+      }
+      this._score += moveScore;
     }
 
     // 6. Game-over check: no valid moves and queue is empty
@@ -266,17 +269,34 @@ export class ThreesGame {
     }
   }
 
+  /** All colors that can appear as random starting tiles. */
+  private static readonly _RANDOM_POOL: CellValue[] = [
+    CYAN, MAGENTA, YELLOW,
+    LIGHT_CYAN, LIGHT_MAGENTA, LIGHT_YELLOW,
+    RED, GREEN, BLUE,
+    DARK_RED, DARK_GREEN, DARK_BLUE,
+    LIGHT_GRAY, DARK_GRAY,
+  ];
+
   /**
    * Places random starting tiles on the empty board.
-   * Starts with 4-6 Black tiles.
+   * 2-3 Blacks, 2-3 Whites, and 2-3 random colors.
    */
   private _placeRandomStartTiles(): void {
-    const count = this.config.startTilesCount > 0
-      ? this.config.startTilesCount
-      : randomInt(4, 6, this._rng); // 4, 5, or 6
+    const blackCount = randomInt(2, 3, this._rng);
+    const whiteCount = randomInt(2, 3, this._rng);
+    const randomCount = randomInt(2, 3, this._rng);
+
+    const tiles: CellValue[] = [];
+    for (let i = 0; i < blackCount; i++) tiles.push(BLACK);
+    for (let i = 0; i < whiteCount; i++) tiles.push(WHITE);
+    const pool = ThreesGame._RANDOM_POOL;
+    for (let i = 0; i < randomCount; i++) {
+      tiles.push(pool[Math.floor(this._rng() * pool.length)]);
+    }
 
     const maxTiles = Math.min(
-      count,
+      tiles.length,
       this.config.gridSize * this.config.gridSize,
     );
 
@@ -285,7 +305,7 @@ export class ThreesGame {
       if (empty.length === 0) break;
 
       const pos = empty[Math.floor(this._rng() * empty.length)];
-      this._grid[pos.row][pos.col] = BLACK;
+      this._grid[pos.row][pos.col] = tiles[i];
     }
   }
 }

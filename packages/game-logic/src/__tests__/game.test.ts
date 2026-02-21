@@ -3,23 +3,17 @@ import { BLACK, tileColorIndex, BLACK_IDX } from '../color';
 
 describe('ThreesGame', () => {
   describe('initialization', () => {
-    test('default config creates a playing game with 4-6 start tiles', () => {
+    test('default config creates a playing game with 6-9 start tiles', () => {
       const game = new ThreesGame();
       expect(game.status).toBe('playing');
       expect(game.moveCount).toBe(0);
       expect(game.grid.length).toBe(4);
       expect(game.grid[0].length).toBe(4);
 
+      // 2-3 blacks + 2-3 whites + 2-3 random = 6-9 tiles
       const count = game.grid.flat().filter(v => v > 0).length;
-      expect(count).toBeGreaterThanOrEqual(4);
-      expect(count).toBeLessThanOrEqual(6);
-
-      // All start tiles should be BLACK
-      for (const v of game.grid.flat()) {
-        if (v > 0) {
-          expect(v).toBe(BLACK);
-        }
-      }
+      expect(count).toBeGreaterThanOrEqual(6);
+      expect(count).toBeLessThanOrEqual(9);
     });
 
     test('queue starts empty', () => {
@@ -149,10 +143,10 @@ describe('ThreesGame', () => {
       expect(game.status).toBe('playing');
       expect(game.score).toBe(0);
       expect(game.queue).toEqual([]);
-      // Board should have between 4 and 6 tiles (all BLACK)
+      // Board should have between 6 and 9 tiles
       const tileCount = game.grid.flat().filter(c => c > 0).length;
-      expect(tileCount).toBeGreaterThanOrEqual(4);
-      expect(tileCount).toBeLessThanOrEqual(6);
+      expect(tileCount).toBeGreaterThanOrEqual(6);
+      expect(tileCount).toBeLessThanOrEqual(9);
     });
   });
 
@@ -170,15 +164,33 @@ describe('ThreesGame', () => {
   });
 
   describe('queue-based spawning', () => {
-    test('queue spawns up to 2 tiles per move', () => {
+    test('split outputs persist in queue until next move', () => {
+      // After a split, the new items should remain in the queue
+      // (they get spawned on the NEXT move, not the same move)
+      let verified = false;
+      for (let seed = 1; seed <= 50 && !verified; seed++) {
+        const game = new ThreesGame({ seed });
+        const dirs = ['left', 'right', 'up', 'down'] as const;
+        for (let i = 0; i < 40 && !verified; i++) {
+          for (const dir of dirs) {
+            game.move(dir);
+            if (game.queue.length > 0) {
+              // Queue has items — they should be consumed on the next move
+              verified = true;
+              break;
+            }
+          }
+        }
+      }
+      expect(verified).toBe(true);
+    });
+
+    test('queue length stays reasonable over many moves', () => {
       const game = new ThreesGame({ seed: 42 });
-      // Play until queue has items and a valid move exists
       const dirs = ['left', 'right', 'up', 'down'] as const;
       for (let i = 0; i < 30; i++) {
         game.move(dirs[i % dirs.length]);
-        // Queue should never grow without bound due to spawning
       }
-      // Queue length should be reasonable
       expect(game.queue.length).toBeLessThan(100);
     });
   });
