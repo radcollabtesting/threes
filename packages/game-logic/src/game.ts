@@ -15,6 +15,7 @@ import {
 } from './board';
 import { applyMove, hasAnyValidMove } from './move';
 import { spawnFromQueue } from './spawn';
+import { createNextTileGenerator } from './next-tile';
 import { createRng, randomInt, shuffleArray } from '@threes/rng';
 import {
   BLACK, WHITE,
@@ -31,8 +32,10 @@ import {
  * game-over detection, and scoring.
  *
  * Split mechanic: matching 2 tiles removes them and produces output
- * tiles that go into a queue. The queue spawns tiles onto the board
- * after each move (up to 2 per move, on the opposite edge).
+ * tiles that go into a queue. The queue always has at least 4 tiles
+ * (auto-filled with BLACK/WHITE from a bag generator). Split outputs
+ * get shuffled into the visible window (first 4). Two tiles spawn
+ * from queue front each move.
  */
 export class ThreesGame {
   readonly config: GameConfig;
@@ -44,11 +47,13 @@ export class ThreesGame {
   private _score: number;
   private _moveCount: number;
   private _rng: () => number;
+  private _nextTile: () => CellValue;
   private _lastMoveEvents: MoveEvent[];
 
   constructor(configOverrides?: Partial<GameConfig>) {
     this.config = resolveConfig(configOverrides);
     this._rng = createRng(this.config.seed);
+    this._nextTile = createNextTileGenerator(this._rng);
     this._grid = createEmptyGrid(this.config.gridSize);
     this._multipliers = createEmptyGrid(this.config.gridSize);
     this._queue = [];
@@ -118,14 +123,12 @@ export class ThreesGame {
    *
    * Turn flow:
    *   1. Apply movement + splits.
-   *   2. Spawn up to 2 tiles from queue (items from PREVIOUS moves).
-   *   3. Collect NEW split outputs, randomize, add to queue (for NEXT move).
-   *   4. Award 2x multiplier on milestone merge-point tiles.
-   *   5. Add split score to running total.
-   *   6. Check game-over.
-   *
-   * Spawning before queuing ensures split outputs persist in the queue
-   * for at least one move, giving the player visual feedback.
+   *   2. Spawn up to 2 tiles from queue front.
+   *   3. Mix split outputs into the visible window (first 4 of queue).
+   *   4. Refill queue to minimum 4 with generated BLACK/WHITE tiles.
+   *   5. Award 2x multiplier on milestone merge-point tiles.
+   *   6. Add split score to running total.
+   *   7. Check game-over.
    *
    * @returns true if the move was valid and applied; false otherwise.
    */
@@ -149,7 +152,7 @@ export class ThreesGame {
     // Update multiplier grid to follow tile movements
     this._updateMultipliersFromEvents(events);
 
-    // 2. Spawn from queue FIRST (items from previous moves)
+    // 2. Spawn from queue front
     const spawnCount = Math.min(this.config.queueSpawnCount, this._queue.length);
     if (spawnCount > 0) {
       const { spawned, consumed } = spawnFromQueue(
@@ -175,20 +178,26 @@ export class ThreesGame {
       }
     }
 
-    // 3. Collect NEW split outputs, randomize, add to queue (for next move)
+    // 3. Mix split outputs into the visible window (first 4 queue slots)
     if (splitOutputs.length > 0) {
-      const shuffled = shuffleArray(splitOutputs, this._rng);
-      this._queue.push(...shuffled);
+      const windowSize = Math.min(4, this._queue.length);
+      const window = this._queue.splice(0, windowSize);
+      window.push(...splitOutputs);
+      const shuffled = shuffleArray(window, this._rng);
+      this._queue.unshift(...shuffled);
     }
 
-    // 4. Award 2x on milestone merge-point tiles
+    // 4. Refill queue to minimum 4 with generated tiles
+    this._fillQueue(4);
+
+    // 5. Award 2x on milestone merge-point tiles
     for (const ev of events) {
       if (ev.type === 'merge' && ev.isMilestone) {
         this._multipliers[ev.to.row][ev.to.col] = 1;
       }
     }
 
-    // 5. Add split score (with 2x bonus for tiles that had multipliers)
+    // 6. Add split score (with 2x bonus for tiles that had multipliers)
     if (this.config.scoringEnabled) {
       let moveScore = splitScore;
       // Check if any merged tile had a 2x multiplier
@@ -204,8 +213,8 @@ export class ThreesGame {
       this._score += moveScore;
     }
 
-    // 6. Game-over check: no valid moves and queue is empty
-    if (!hasAnyValidMove(this._grid) && this._queue.length === 0) {
+    // 7. Game-over check: no valid moves
+    if (!hasAnyValidMove(this._grid)) {
       this._status = 'ended';
     }
 
@@ -218,6 +227,7 @@ export class ThreesGame {
   restart(): void {
     const newSeed = Math.floor(Math.random() * 2147483647);
     this._rng = createRng(newSeed);
+    this._nextTile = createNextTileGenerator(this._rng);
     this._grid = createEmptyGrid(this.config.gridSize);
     this._multipliers = createEmptyGrid(this.config.gridSize);
     this._queue = [];
@@ -233,6 +243,7 @@ export class ThreesGame {
 
   private _initializeBoard(): void {
     this._placeRandomStartTiles();
+    this._fillQueue(4);
   }
 
   /**
@@ -266,6 +277,13 @@ export class ThreesGame {
           this._multipliers[r][c] = oldMult[r][c];
         }
       }
+    }
+  }
+
+  /** Fills the queue to at least `minSize` using the bag generator. */
+  private _fillQueue(minSize: number): void {
+    while (this._queue.length < minSize) {
+      this._queue.push(this._nextTile());
     }
   }
 

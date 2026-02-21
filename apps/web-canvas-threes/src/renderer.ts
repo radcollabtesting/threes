@@ -37,7 +37,7 @@ interface MergeIndicatorSet {
 }
 
 /** Max queue tiles to show in the preview bar */
-const QUEUE_PREVIEW_COUNT = 3;
+const QUEUE_PREVIEW_COUNT = 4;
 
 export class Renderer {
   private canvas: HTMLCanvasElement;
@@ -297,7 +297,7 @@ export class Renderer {
   /* ── Queue preview bar ────────────────────────────────── */
 
   /**
-   * Draws the queue preview: up to 3 tiles + "+X more" badge.
+   * Draws the queue preview: up to 4 tiles + "+X more" badge.
    */
   private drawQueuePreview(
     queue: CellValue[],

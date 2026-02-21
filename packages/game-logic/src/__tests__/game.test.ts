@@ -16,10 +16,14 @@ describe('ThreesGame', () => {
       expect(count).toBeLessThanOrEqual(9);
     });
 
-    test('queue starts empty', () => {
+    test('queue starts with 4 auto-generated tiles', () => {
       const game = new ThreesGame();
-      expect(game.queue).toEqual([]);
-      expect(game.nextTile).toBe(0);
+      expect(game.queue.length).toBe(4);
+      expect(game.nextTile).toBeGreaterThan(0);
+      // All tiles should be BLACK or WHITE (from bag generator)
+      for (const tile of game.queue) {
+        expect(tile).toBeGreaterThan(0);
+      }
     });
   });
 
@@ -39,8 +43,9 @@ describe('ThreesGame', () => {
       expect(moved).toBe(true);
     });
 
-    test('split produces queue items', () => {
-      // Try multiple seeds — at least one should produce a split quickly
+    test('split outputs get mixed into queue', () => {
+      // Try multiple seeds — at least one should produce a split
+      // Queue always has ≥4 items, so after a split it should grow
       let splitHappened = false;
       for (let seed = 1; seed <= 20 && !splitHappened; seed++) {
         const game = new ThreesGame({ seed });
@@ -49,6 +54,7 @@ describe('ThreesGame', () => {
           for (const dir of dirs) {
             const beforeQueue = game.queue.length;
             game.move(dir);
+            // Split outputs + refill means queue grows beyond 4
             if (game.queue.length > beforeQueue) {
               splitHappened = true;
               break;
@@ -142,7 +148,7 @@ describe('ThreesGame', () => {
       expect(game.moveCount).toBe(0);
       expect(game.status).toBe('playing');
       expect(game.score).toBe(0);
-      expect(game.queue).toEqual([]);
+      expect(game.queue.length).toBe(4);
       // Board should have between 6 and 9 tiles
       const tileCount = game.grid.flat().filter(c => c > 0).length;
       expect(tileCount).toBeGreaterThanOrEqual(6);
@@ -164,25 +170,15 @@ describe('ThreesGame', () => {
   });
 
   describe('queue-based spawning', () => {
-    test('split outputs persist in queue until next move', () => {
-      // After a split, the new items should remain in the queue
-      // (they get spawned on the NEXT move, not the same move)
-      let verified = false;
-      for (let seed = 1; seed <= 50 && !verified; seed++) {
-        const game = new ThreesGame({ seed });
-        const dirs = ['left', 'right', 'up', 'down'] as const;
-        for (let i = 0; i < 40 && !verified; i++) {
-          for (const dir of dirs) {
-            game.move(dir);
-            if (game.queue.length > 0) {
-              // Queue has items — they should be consumed on the next move
-              verified = true;
-              break;
-            }
-          }
-        }
+    test('queue always has at least 4 items', () => {
+      const game = new ThreesGame({ seed: 42 });
+      expect(game.queue.length).toBeGreaterThanOrEqual(4);
+      const dirs = ['left', 'right', 'up', 'down'] as const;
+      for (let i = 0; i < 30; i++) {
+        game.move(dirs[i % dirs.length]);
+        if (game.status === 'ended') break;
+        expect(game.queue.length).toBeGreaterThanOrEqual(4);
       }
-      expect(verified).toBe(true);
     });
 
     test('queue length stays reasonable over many moves', () => {
@@ -196,7 +192,7 @@ describe('ThreesGame', () => {
   });
 
   describe('game over', () => {
-    test('game ends when no valid moves and queue is empty', () => {
+    test('game ends when no valid moves remain', () => {
       // We just verify the game can eventually end
       const game = new ThreesGame({ seed: 42 });
       const dirs = ['up', 'left', 'down', 'right'] as const;
@@ -205,8 +201,8 @@ describe('ThreesGame', () => {
         game.move(dirs[i % dirs.length]);
         if (game.status === 'ended') ended = true;
       }
-      // Game should be able to continue for a while (cycle allows infinite play)
-      // Not asserting it ends, as the cycle may keep it going
+      // Not asserting it ends; with auto-generated queue the board
+      // fills up eventually, but splits keep creating space
     });
   });
 });
