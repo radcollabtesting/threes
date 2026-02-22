@@ -20,9 +20,6 @@ import { createRng, randomInt, shuffleArray } from '@threes/rng';
 import {
   BLACK, WHITE,
   CYAN, MAGENTA, YELLOW, RED, GREEN, BLUE,
-  LIGHT_GRAY, DARK_GRAY,
-  LIGHT_CYAN, LIGHT_MAGENTA, LIGHT_YELLOW,
-  DARK_RED, DARK_GREEN, DARK_BLUE,
 } from './color';
 
 /**
@@ -287,13 +284,9 @@ export class ThreesGame {
     }
   }
 
-  /** All colors that can appear as random starting tiles. */
+  /** All colors that can appear as random starting tiles (non-endpoint). */
   private static readonly _RANDOM_POOL: CellValue[] = [
-    CYAN, MAGENTA, YELLOW,
-    LIGHT_CYAN, LIGHT_MAGENTA, LIGHT_YELLOW,
-    RED, GREEN, BLUE,
-    DARK_RED, DARK_GREEN, DARK_BLUE,
-    LIGHT_GRAY, DARK_GRAY,
+    CYAN, MAGENTA, YELLOW, RED, GREEN, BLUE,
   ];
 
   /**

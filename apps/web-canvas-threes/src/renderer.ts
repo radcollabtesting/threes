@@ -7,7 +7,7 @@
 
 import { scoreTile, tileHex, tileTextColor, tileLabel, tileDisplayDots, getMergePartners, encodeTile, canMerge, tileColorIndex, tileDots, mergeResult, type CellValue, type Grid, type Direction, type Position } from '@threes/game-logic';
 import { COLORS, SIZES, BOARD, ANIMATION, BUTTON, SCORE_LIST, DARK_THEME, LIGHT_THEME, type ThemeColors } from '@threes/design-tokens';
-import type { AnimState } from './animation';
+import type { AnimState, SplitParticle } from './animation';
 import type { DragState, TilePreview } from './drag';
 import type { ScoreEntry } from './score-history';
 
@@ -196,6 +196,11 @@ export class Renderer {
       this.drawQueuePreview(queue ?? [], bx, by, tw, th, gx, br, s, anim, vw);
     }
 
+    // ── Split particles (flying from merge point to queue)
+    if (anim.splitParticles.length > 0) {
+      this.drawSplitParticles(anim.splitParticles, bx, by, tw, th, gx, gy, br, s, vw);
+    }
+
     // ── Game-over overlay
     this._newGameBtnBounds = null;
 
@@ -382,6 +387,90 @@ export class Renderer {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(`+${remaining}`, px + badgeW / 2, badgeY + badgeH / 2);
+    }
+  }
+
+  /* ── Split particle animation ─────────────────────────── */
+
+  /**
+   * Draws split particles flying from the merge point to the queue area.
+   * Particles shrink and arc downward as they travel.
+   */
+  private drawSplitParticles(
+    particles: SplitParticle[],
+    bx: number, by: number,
+    tw: number, th: number,
+    gx: number, gy: number,
+    br: number, s: number,
+    vw: number,
+  ): void {
+    const ctx = this.ctx;
+    const queueY = by + BOARD.height * s + SIZES.nextTileGapFromBoard * s;
+
+    for (const p of particles) {
+      const t = easeOut(p.progress);
+
+      // Start position: center of the merge cell
+      const startX = bx + p.fromCol * (tw + gx) + tw / 2;
+      const startY = by + p.fromRow * (th + gy) + th / 2;
+
+      // End position: center of the queue area
+      const endX = vw / 2;
+      const endY = queueY + th * 0.65 / 2;
+
+      // Interpolate with a slight arc (particles rise then fall)
+      const arcHeight = -60 * s;
+      const x = startX + (endX - startX) * t;
+      const y = startY + (endY - startY) * t + arcHeight * Math.sin(t * Math.PI);
+
+      // Size: start at full tile size, shrink to queue preview size
+      const startSize = tw * 0.8;
+      const endSize = tw * 0.4;
+      const size = startSize + (endSize - startSize) * t;
+
+      // Alpha: fully visible, fade near the end
+      const alpha = t > 0.8 ? 1 - (t - 0.8) / 0.2 : 1;
+
+      const fill = tileHex(p.value);
+      const label = tileLabel(p.value);
+      const textColor = tileTextColor(p.value);
+      const tileR = br * (size / tw);
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      this.roundRect(x - size / 2, y - size / 2, size, size, tileR, fill);
+
+      // Border
+      const borderW = 2 * s * (size / tw);
+      ctx.strokeStyle = this.theme.tileBorder;
+      ctx.lineWidth = borderW;
+      ctx.beginPath();
+      const rx = x - size / 2;
+      const ry = y - size / 2;
+      ctx.moveTo(rx + tileR, ry);
+      ctx.lineTo(rx + size - tileR, ry);
+      ctx.quadraticCurveTo(rx + size, ry, rx + size, ry + tileR);
+      ctx.lineTo(rx + size, ry + size - tileR);
+      ctx.quadraticCurveTo(rx + size, ry + size, rx + size - tileR, ry + size);
+      ctx.lineTo(rx + tileR, ry + size);
+      ctx.quadraticCurveTo(rx, ry + size, rx, ry + size - tileR);
+      ctx.lineTo(rx, ry + tileR);
+      ctx.quadraticCurveTo(rx, ry, rx + tileR, ry);
+      ctx.closePath();
+      ctx.stroke();
+
+      // Label
+      if (label) {
+        const fontSize = SIZES.tileFontSize * s * (size / tw);
+        ctx.fillStyle = textColor;
+        ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, x, y);
+      }
+
+      ctx.restore();
     }
   }
 

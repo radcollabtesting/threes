@@ -1,8 +1,8 @@
 import { applyMove, isValidMove, hasAnyValidMove } from '../move';
 import {
-  BLACK, CYAN, MAGENTA, WHITE, LIGHT_GRAY,
+  BLACK, CYAN, MAGENTA, WHITE,
   tileColorIndex,
-  LIGHT_GRAY_IDX, CYAN_IDX, MAGENTA_IDX, YELLOW_IDX,
+  CYAN_IDX, MAGENTA_IDX, YELLOW_IDX, WHITE_IDX, BLACK_IDX,
 } from '../color';
 import type { Grid } from '../types';
 
@@ -58,9 +58,28 @@ describe('applyMove — one-step movement', () => {
 });
 
 describe('applyMove — split during movement', () => {
-  test('BK + BK merge when moving left → merge point empties (regular split)', () => {
+  test('BK + BK merge when moving left → milestone split (first output on merge point)', () => {
     const grid: Grid = [
       [BK, BK, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ];
+    const { newGrid, changed, splitOutputs, events } = applyMove(grid, 'left');
+    expect(changed).toBe(true);
+    // Milestone: first output stays on merge point (C, M, or Y)
+    expect(newGrid[0][0]).toBeGreaterThan(0);
+    const mergePointCI = tileColorIndex(newGrid[0][0]);
+    expect([CYAN_IDX, MAGENTA_IDX, YELLOW_IDX]).toContain(mergePointCI);
+    // Other 2 go to queue
+    expect(splitOutputs).toHaveLength(2);
+    const mergeEvent = events.find(e => e.type === 'merge');
+    expect(mergeEvent?.isMilestone).toBe(true);
+  });
+
+  test('C + C merge → regular split (merge point empties, 2 White to queue)', () => {
+    const grid: Grid = [
+      [C, C, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
@@ -72,8 +91,8 @@ describe('applyMove — split during movement', () => {
     expect(newGrid[0][1]).toBe(0);
     // Outputs go to queue
     expect(splitOutputs).toHaveLength(2);
-    expect(tileColorIndex(splitOutputs[0])).toBe(LIGHT_GRAY_IDX);
-    expect(tileColorIndex(splitOutputs[1])).toBe(LIGHT_GRAY_IDX);
+    expect(tileColorIndex(splitOutputs[0])).toBe(WHITE_IDX);
+    expect(tileColorIndex(splitOutputs[1])).toBe(WHITE_IDX);
   });
 
   test('different colors do NOT merge: BK + C', () => {
@@ -89,43 +108,28 @@ describe('applyMove — split during movement', () => {
 
   test('merged tile cannot merge again in the same turn', () => {
     const grid: Grid = [
-      [BK, BK, BK, 0],
+      [C, C, C, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
       [0, 0, 0, 0],
     ];
-    const { newGrid, splitOutputs } = applyMove(grid, 'left');
-    // First two BKs merge at col 0 (regular split → empties), third BK slides to col 1
-    // But col 0 is empty now, so third BK slides into col 1, which is also empty
+    const { splitOutputs } = applyMove(grid, 'left');
     // Only one split happens (the merged flag prevents another)
     expect(splitOutputs).toHaveLength(2);
-    // Third BK should still be on the board
-    const nonEmpty = newGrid[0].filter(v => v > 0);
-    expect(nonEmpty).toHaveLength(1);
-    expect(nonEmpty[0]).toBe(BK);
-  });
-
-  test('milestone split: Light Gray + Light Gray → first output on merge point', () => {
-    const LG = LIGHT_GRAY;
-    const grid: Grid = [
-      [LG, LG, 0, 0],
-      [0, 0, 0, 0],
-      [0, 0, 0, 0],
-      [0, 0, 0, 0],
-    ];
-    const { newGrid, splitOutputs, events } = applyMove(grid, 'left');
-    // Milestone: first output stays on merge point
-    expect(newGrid[0][0]).toBeGreaterThan(0);
-    const mergePointCI = tileColorIndex(newGrid[0][0]);
-    expect([CYAN_IDX, MAGENTA_IDX, YELLOW_IDX]).toContain(mergePointCI);
-    // Other 2 go to queue
-    expect(splitOutputs).toHaveLength(2);
-    // Merge event should have isMilestone
-    const mergeEvent = events.find(e => e.type === 'merge');
-    expect(mergeEvent?.isMilestone).toBe(true);
   });
 
   test('splitScore is accumulated from splits', () => {
+    const grid: Grid = [
+      [C, C, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ];
+    const { splitScore } = applyMove(grid, 'left');
+    expect(splitScore).toBe(3); // Cyan regular split scores 3
+  });
+
+  test('BK milestone split scores 27', () => {
     const grid: Grid = [
       [BK, BK, 0, 0],
       [0, 0, 0, 0],
@@ -133,7 +137,7 @@ describe('applyMove — split during movement', () => {
       [0, 0, 0, 0],
     ];
     const { splitScore } = applyMove(grid, 'left');
-    expect(splitScore).toBe(3); // Black splits score 3
+    expect(splitScore).toBe(27);
   });
 });
 

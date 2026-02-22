@@ -12,7 +12,7 @@
  * Touch/mouse: drag to preview, release past 50% to commit.
  */
 
-import { ThreesGame, cloneGrid, type Direction, type MoveEvent } from '@threes/game-logic';
+import { ThreesGame, cloneGrid, colorSplitResult, type Direction, type MoveEvent } from '@threes/game-logic';
 import { Renderer } from './renderer';
 import type { GameOverData, TutorialRenderInfo } from './renderer';
 import {
@@ -21,6 +21,7 @@ import {
   triggerSpawnOnly,
   triggerNextTileAnim,
   triggerShake,
+  triggerSplitParticles,
   updateAnimations,
   type AnimState,
 } from './animation';
@@ -75,6 +76,26 @@ function playMergeSoundsFromEvents(events: MoveEvent[]): void {
   }
 }
 
+/** Triggers split particle animations for any merge events that produced split outputs. */
+function triggerSplitParticlesFromEvents(events: MoveEvent[]): void {
+  for (const ev of events) {
+    if (ev.type === 'merge' && ev.from) {
+      // Compute what the split produced based on the original tile values
+      // ev.from has the moving tile's original value stored in ev.value
+      // For the actual split outputs, we use splitResult
+      const result = colorSplitResult(ev.value, ev.value);
+      if (result) {
+        // For milestone splits, the first output stays on the board;
+        // only the queue-bound outputs become particles
+        const queueOutputs = result.isMilestone
+          ? result.outputs.slice(1)
+          : result.outputs;
+        triggerSplitParticles(anim, ev.to.row, ev.to.col, queueOutputs);
+      }
+    }
+  }
+}
+
 /* ── Input handlers ────────────────────────────────────── */
 
 function handleInstantMove(direction: Direction): void {
@@ -86,6 +107,7 @@ function handleInstantMove(direction: Direction): void {
   if (success) {
     triggerMoveAnimations(game.lastMoveEvents, anim, direction);
     triggerNextTileAnim(anim, oldNext, game.nextTile);
+    triggerSplitParticlesFromEvents(game.lastMoveEvents);
     playMergeSoundsFromEvents(game.lastMoveEvents);
     if ((game.status as string) === 'ended') onGameOver();
   } else {
@@ -247,6 +269,7 @@ function loop(now: number): void {
         game.move(direction);
         triggerSpawnOnly(game.lastMoveEvents, anim, direction);
         triggerNextTileAnim(anim, oldNext, game.nextTile);
+        triggerSplitParticlesFromEvents(game.lastMoveEvents);
         playMergeSoundsFromEvents(game.lastMoveEvents);
         if (game.status === 'ended') onGameOver();
       } else {

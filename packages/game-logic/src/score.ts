@@ -4,9 +4,8 @@ import { tileTier } from './color';
 /**
  * Computes the score for a single tile (used for display/game-over).
  *
- * Tier 0 (transition: Black/White/Grays):  3 pts
- * Tier 1 (primaries: C/M/Y/R/G/B):        9 pts
- * Tier 2 (variants: Light/Dark):           3 pts
+ * Tier 0 (endpoints: Black/White):   3 pts
+ * Tier 1 (primaries: C/M/Y/R/G/B):  9 pts
  */
 export function scoreTile(value: CellValue): number {
   if (value === 0) return 0;

@@ -56,6 +56,16 @@ export interface MixSlideAnim {
   progress: number; // 0 → 1
 }
 
+export interface SplitParticle {
+  /** Grid row/col where the split happened */
+  fromRow: number;
+  fromCol: number;
+  /** The tile color value of this particle */
+  value: number;
+  /** 0 → 1 */
+  progress: number;
+}
+
 export interface AnimState {
   slides: Map<string, SlideAnim>;
   merges: Map<string, MergeAnim>;
@@ -64,6 +74,7 @@ export interface AnimState {
   nextTile: NextTileAnim;
   ripple: RippleAnim | null;
   mixSlide: MixSlideAnim | null;
+  splitParticles: SplitParticle[];
 }
 
 /* ── Factory ───────────────────────────────────────────── */
@@ -77,6 +88,7 @@ export function createAnimState(): AnimState {
     nextTile: { active: false, progress: 1, oldValue: 0, newValue: 0 },
     ripple: null,
     mixSlide: null,
+    splitParticles: [],
   };
 }
 
@@ -189,6 +201,29 @@ export function triggerMixSlide(
   };
 }
 
+/** Duration for split particles flying to queue (ms) */
+const SPLIT_PARTICLE_DURATION = 500;
+
+/**
+ * Triggers split particle animations — colored pieces fly from the
+ * merge point toward the queue area to show what was produced.
+ */
+export function triggerSplitParticles(
+  anim: AnimState,
+  mergeRow: number,
+  mergeCol: number,
+  outputValues: number[],
+): void {
+  for (const value of outputValues) {
+    anim.splitParticles.push({
+      fromRow: mergeRow,
+      fromCol: mergeCol,
+      value,
+      progress: 0,
+    });
+  }
+}
+
 /** Triggers the invalid-move shake. Respects prefers-reduced-motion. */
 export function triggerShake(anim: AnimState): void {
   if (typeof window !== 'undefined' &&
@@ -253,6 +288,23 @@ export function updateAnimations(anim: AnimState, dt: number): boolean {
   if (anim.shake.active && anim.shake.progress < 1) {
     anim.shake.progress = Math.min(1, anim.shake.progress + dt / ANIMATION.shakeDuration);
     active = true;
+  }
+
+  // Split particles (start after merges finish)
+  const allMergesDone = ![...anim.merges.values()].some(m => m.progress < 1);
+  if (allMergesDone && allSlidesDone) {
+    for (let i = anim.splitParticles.length - 1; i >= 0; i--) {
+      const p = anim.splitParticles[i];
+      if (p.progress < 1) {
+        p.progress = Math.min(1, p.progress + dt / SPLIT_PARTICLE_DURATION);
+        active = true;
+      }
+      if (p.progress >= 1) {
+        anim.splitParticles.splice(i, 1);
+      }
+    }
+  } else if (anim.splitParticles.length > 0) {
+    active = true; // waiting for merges to finish
   }
 
   // Mix slide (catalyst mix source tiles sliding into gray)

@@ -1,12 +1,13 @@
 import { selectSpawnPosition, getSpawnEdgeCells, spawnFromQueue } from '../spawn';
 import { resolveConfig } from '../config';
 import { createRng } from '@threes/rng';
-import { BLACK, CYAN, MAGENTA, LIGHT_GRAY } from '../color';
+import { BLACK, CYAN, MAGENTA, WHITE } from '../color';
 import type { Grid } from '../types';
 
 const BK = BLACK;
 const C = CYAN;
 const M = MAGENTA;
+const W = WHITE;
 
 describe('getSpawnEdgeCells', () => {
   test('swipe left => right edge (col 3)', () => {
@@ -91,7 +92,7 @@ describe('spawnFromQueue', () => {
       [0, 0, 0, 0],
       [0, 0, 0, 0],
     ];
-    const queue = [LIGHT_GRAY, CYAN, MAGENTA];
+    const queue = [W, C, M];
     const rng = createRng(42);
     const { spawned, consumed } = spawnFromQueue(
       grid, queue, 'left', new Set([0]), config, rng, 2,
@@ -111,7 +112,7 @@ describe('spawnFromQueue', () => {
       [0, 0, 0, 0],
       [0, 0, 0, 0],
     ];
-    const queue = [LIGHT_GRAY];
+    const queue = [W];
     const rng = createRng(42);
     const { consumed } = spawnFromQueue(
       grid, queue, 'left', new Set([0, 1, 2, 3]), config, rng, 2,
@@ -126,7 +127,7 @@ describe('spawnFromQueue', () => {
       [M, C, BK, M],
       [BK, M, C, BK],
     ];
-    const queue = [LIGHT_GRAY, CYAN];
+    const queue = [W, C];
     const rng = createRng(42);
     const { consumed } = spawnFromQueue(
       grid, queue, 'left', new Set([0]), config, rng, 2,
